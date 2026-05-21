@@ -176,6 +176,10 @@ def get_settings():
     whisper_api_base_url = _setting_value(settings, 'whisper_api_base_url', default_whisper_api_base_url)
     whisper_api_key = _setting_value(settings, 'whisper_api_key', '')
     whisper_api_model = _setting_value(settings, 'whisper_api_model', default_whisper_api_model)
+    whisper_api_skip_flac_raw = _setting_value(
+        settings, 'whisper_api_skip_flac', str(default_whisper_api_skip_flac).lower()
+    )
+    whisper_api_skip_flac = str(whisper_api_skip_flac_raw).lower() in ('true', '1', 'yes')
     whisper_language = _setting_value(settings, 'whisper_language', default_whisper_language)
     whisper_compute_type = _setting_value(settings, 'whisper_compute_type', default_whisper_compute_type)
     vad_gap_enabled_raw = _setting_value(settings, 'vad_gap_detection_enabled', str(default_vad_gap_enabled).lower())
