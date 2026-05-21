@@ -281,7 +281,7 @@ def _get_whisper_settings() -> Dict[str, str]:
     """Read all whisper backend settings from DB with env var fallbacks.
 
     Returns a dict with keys: backend, api_base_url, api_key, api_model,
-    language. Does NOT include compute_type, which is read separately via
+    language, skip_flac. Does NOT include compute_type, which is read separately via
     _get_whisper_compute_type to keep its value out of any dict that also
     holds api_key (CodeQL py/clear-text-logging-sensitive-data).
     """
@@ -291,6 +291,7 @@ def _get_whisper_settings() -> Dict[str, str]:
         'api_key': os.environ.get('WHISPER_API_KEY', ''),
         'api_model': os.environ.get('WHISPER_API_MODEL', 'whisper-1'),
         'language': os.environ.get('WHISPER_LANGUAGE') or 'en',
+        'skip_flac': os.environ.get('WHISPER_API_SKIP_FLAC', 'false'),
     }
     try:
         # Inline import: Database depends on modules that import transcriber,
@@ -303,6 +304,7 @@ def _get_whisper_settings() -> Dict[str, str]:
             ('whisper_api_key', 'api_key'),
             ('whisper_api_model', 'api_model'),
             ('whisper_language', 'language'),
+            ('whisper_api_skip_flac', 'skip_flac'),
         ]:
             if setting_key == 'whisper_api_key':
                 val = db.get_secret(setting_key)
@@ -639,9 +641,15 @@ class Transcriber:
             preprocessed_path = self.preprocess_audio(audio_path)
             transcribe_path = preprocessed_path if preprocessed_path else audio_path
 
+            skip_flac = str(whisper_settings.get('skip_flac', '')).strip().lower() in ('true', '1', 'yes')
+
             # After preprocessing, compress to FLAC for upload (lossless, ~4-5x smaller than WAV).
             # Prevents 413 errors from APIs with tight upload limits (e.g. OpenRouter).
-            if transcribe_path.endswith('.wav'):
+            if skip_flac and transcribe_path.endswith('.wav'):
+                logger.info(
+                    "Skipping FLAC compression (whisper_api_skip_flac=true); uploading WAV directly"
+                )
+            if transcribe_path.endswith('.wav') and not skip_flac:
                 fd, flac_path = tempfile.mkstemp(suffix='.flac')
                 os.close(fd)
                 try:

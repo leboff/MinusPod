@@ -6,6 +6,12 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **Remote Whisper API: optional "Skip FLAC compression" toggle.** When using an OpenAI-compatible Whisper backend, MinusPod normally re-encodes preprocessed WAV to FLAC before upload to avoid 413 errors on size-limited APIs. Self-hosted servers (e.g. whisper.cpp on localhost) can now skip that extra ffmpeg pass via Settings → Transcription or the `WHISPER_API_SKIP_FLAC=true` env var.
+
 ## [2.5.6] - 2026-05-19
 
 ### Fixed

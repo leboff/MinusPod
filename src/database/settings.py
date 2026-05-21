@@ -133,6 +133,7 @@ class SettingsMixin:
             'whisper_backend': os.environ.get('WHISPER_BACKEND', 'local'),
             'whisper_api_base_url': os.environ.get('WHISPER_API_BASE_URL', ''),
             'whisper_api_model': os.environ.get('WHISPER_API_MODEL', 'whisper-1'),
+            'whisper_api_skip_flac': os.environ.get('WHISPER_API_SKIP_FLAC', 'false'),
             'whisper_compute_type': os.environ.get('WHISPER_COMPUTE_TYPE', 'auto'),
             'vad_gap_detection_enabled': os.environ.get('VAD_GAP_DETECTION_ENABLED', 'true'),
             'vad_gap_start_min_seconds': os.environ.get('VAD_GAP_START_MIN_SECONDS', '3.0'),

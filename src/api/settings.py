@@ -158,6 +158,7 @@ def get_settings():
     default_whisper_backend = os.environ.get('WHISPER_BACKEND', 'local')
     default_whisper_api_base_url = os.environ.get('WHISPER_API_BASE_URL', '')
     default_whisper_api_model = os.environ.get('WHISPER_API_MODEL', 'whisper-1')
+    default_whisper_api_skip_flac = os.environ.get('WHISPER_API_SKIP_FLAC', 'false').lower() in ('true', '1', 'yes')
     default_whisper_language = os.environ.get('WHISPER_LANGUAGE') or 'en'
     default_whisper_compute_type = os.environ.get('WHISPER_COMPUTE_TYPE', WHISPER_COMPUTE_TYPE_DEFAULT)
     default_vad_gap_enabled = os.environ.get('VAD_GAP_DETECTION_ENABLED', 'true').lower() in ('true', '1', 'yes')
@@ -269,6 +270,7 @@ def get_settings():
         'whisperApiBaseUrl': _sv('whisper_api_base_url', whisper_api_base_url),
         'whisperApiKeyConfigured': bool(whisper_api_key),
         'whisperApiModel': _sv('whisper_api_model', whisper_api_model),
+        'whisperApiSkipFlac': _sv('whisper_api_skip_flac', whisper_api_skip_flac),
         'whisperLanguage': _sv('whisper_language', whisper_language),
         'whisperComputeType': _sv('whisper_compute_type', whisper_compute_type),
         'vadGapDetectionEnabled': _sv('vad_gap_detection_enabled', vad_gap_enabled),
@@ -306,6 +308,7 @@ def get_settings():
             'whisperBackend': default_whisper_backend,
             'whisperApiBaseUrl': default_whisper_api_base_url,
             'whisperApiModel': default_whisper_api_model,
+            'whisperApiSkipFlac': default_whisper_api_skip_flac,
             'whisperLanguage': default_whisper_language,
             'whisperComputeType': default_whisper_compute_type,
             'vadGapDetectionEnabled': default_vad_gap_enabled,
@@ -567,6 +570,15 @@ def _apply_whisper_fields(db, data):
         db.set_setting('whisper_api_model', model_val, is_default=False)
         logger.info(f"Updated whisper API model to: {model_val}")
 
+    if 'whisperApiSkipFlac' in data:
+        raw = data['whisperApiSkipFlac']
+        if isinstance(raw, bool):
+            skip_flac = raw
+        else:
+            skip_flac = str(raw).strip().lower() in ('true', '1', 'yes')
+        db.set_setting('whisper_api_skip_flac', 'true' if skip_flac else 'false', is_default=False)
+        logger.info(f"Updated whisper API skip FLAC to: {skip_flac}")
+
     if 'whisperLanguage' in data:
         lang_val = str(data['whisperLanguage']).strip().lower()
         # Empty string collapses to default ('en'); 'auto' is allowed; otherwise
@@ -789,6 +801,7 @@ def reset_ad_detection_settings():
     db.reset_setting('whisper_api_base_url')
     db.reset_setting('whisper_api_key')
     db.reset_setting('whisper_api_model')
+    db.reset_setting('whisper_api_skip_flac')
     db.reset_setting('whisper_compute_type')
     db.reset_setting('vad_gap_detection_enabled')
     db.reset_setting('vad_gap_start_min_seconds')

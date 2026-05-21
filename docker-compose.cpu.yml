@@ -18,11 +18,11 @@
 
 services:
   minuspod:
-    image: ttlequals0/minuspod:${MINUSPOD_VERSION:-cpu}
+    image: minuspod-cpu:local
     # Uncomment to build locally from Dockerfile.cpu instead of pulling.
-    # build:
-    #   context: .
-    #   dockerfile: Dockerfile.cpu
+    build:
+      context: .
+      dockerfile: Dockerfile.cpu
     # No `platform:` pin - the CPU image is published as a multi-arch
     # manifest (linux/amd64 + linux/arm64). Docker picks the matching
     # variant automatically. Add `platform: linux/amd64` here only if you
@@ -31,7 +31,7 @@ services:
     # (entrypoint.sh drops root via setpriv after fixing volume ownership).
     # Override here to pin a specific APP_UID/APP_GID if your volume is
     # owned by a different user -- e.g. `user: "2000:2000"`.
-    # user: "1000:1000"
+    user: "1000:1000"
     ports:
       - "8000:8000"
     volumes:
@@ -58,10 +58,11 @@ services:
       - WHISPER_DEVICE=${WHISPER_DEVICE:-cpu}
 
       # Recommended for real workloads: offload Whisper to a remote API.
-      # - WHISPER_BACKEND=openai-api
-      # - WHISPER_API_BASE_URL=https://api.groq.com/openai/v1
-      # - WHISPER_API_KEY=${WHISPER_API_KEY}
-      # - WHISPER_API_MODEL=whisper-large-v3-turbo
+      - WHISPER_BACKEND=${WHISPER_BACKEND:-local}
+      - WHISPER_API_BASE_URL=${WHISPER_API_BASE_URL}
+      - WHISPER_API_KEY=${WHISPER_API_KEY}
+      - WHISPER_API_MODEL=${WHISPER_API_MODEL:-whisper-1}
+      - WHISPER_API_SKIP_FLAC=${WHISPER_API_SKIP_FLAC:-false}
 
       # =================================================================
       # Server Configuration

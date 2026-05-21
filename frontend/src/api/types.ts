@@ -113,6 +113,7 @@ export type WhisperBackend = 'local' | 'openai-api';
 export interface WhisperApiConfig {
   baseUrl: string;
   model: string;
+  skipFlac: boolean;
 }
 
 export const LLM_PROVIDERS = {
@@ -149,6 +150,7 @@ export interface Settings {
   whisperBackend: SettingValue;
   whisperApiBaseUrl: SettingValue;
   whisperApiModel: SettingValue;
+  whisperApiSkipFlac: SettingValueBoolean;
   whisperLanguage: SettingValue;
   whisperComputeType: SettingValue;
   llmProvider: SettingValue;
@@ -183,6 +185,7 @@ export interface Settings {
     whisperBackend: WhisperBackend;
     whisperApiBaseUrl: string;
     whisperApiModel: string;
+    whisperApiSkipFlac: boolean;
     whisperLanguage: string;
     whisperComputeType: string;
   };
@@ -213,6 +216,7 @@ export interface UpdateSettingsPayload {
   whisperApiBaseUrl?: string;
   whisperApiKey?: string;
   whisperApiModel?: string;
+  whisperApiSkipFlac?: boolean;
   whisperLanguage?: string;
   whisperComputeType?: string;
   podcastIndexApiKey?: string;
