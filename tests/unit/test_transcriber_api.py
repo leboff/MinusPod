@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from transcriber import (
     Transcriber, _get_whisper_settings, _get_whisper_compute_type,
+    _whisper_api_rejects_word_timestamps,
     calculate_optimal_chunk_duration,
 )
 from config import (
@@ -82,6 +83,20 @@ class TestGetWhisperSettings:
         with patch('database.Database', side_effect=Exception("no db")):
             settings = _get_whisper_settings()
         assert settings['skip_flac'] == 'true'
+
+
+class TestWhisperApiWordTimestampDetection:
+    def test_detects_ovms_word_timestamp_error(self):
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.text = 'Word timestamps not supported for this model'
+        assert _whisper_api_rejects_word_timestamps(resp) is True
+
+    def test_ignores_unrelated_400(self):
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.text = 'invalid model name'
+        assert _whisper_api_rejects_word_timestamps(resp) is False
 
 
 class TestApiChunkDuration:
@@ -232,6 +247,43 @@ class TestTranscribeViaApi:
                 )
                 call_kwargs = mock_post.call_args
                 assert 'Authorization' not in call_kwargs.kwargs['headers']
+        finally:
+            os.unlink(temp_path)
+
+    def test_retries_without_word_timestamps_when_server_rejects_words(self):
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            f.write(b'fake' * 512)
+            temp_path = f.name
+
+        try:
+            reject_words = MagicMock()
+            reject_words.status_code = 400
+            reject_words.text = 'Word timestamps not supported for this model'
+
+            ok_response = MagicMock()
+            ok_response.status_code = 200
+            ok_response.json.return_value = {
+                'segments': [
+                    {'start': 0.0, 'end': 5.0, 'text': ' Hello', 'words': []},
+                ],
+            }
+
+            with patch('transcriber.safe_post', side_effect=[reject_words, ok_response]) as mock_post:
+                transcriber = Transcriber()
+                transcriber.preprocess_audio = MagicMock(return_value=None)
+                result = transcriber._transcribe_via_api(
+                    temp_path, whisper_settings=self._make_settings()
+                )
+
+            assert result is not None
+            assert len(result) == 1
+            assert mock_post.call_count == 2
+            assert mock_post.call_args_list[0].kwargs['data']['timestamp_granularities[]'] == [
+                'segment', 'word',
+            ]
+            assert mock_post.call_args_list[1].kwargs['data']['timestamp_granularities[]'] == [
+                'segment',
+            ]
         finally:
             os.unlink(temp_path)
 

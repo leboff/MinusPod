@@ -600,6 +600,21 @@ class WhisperModelSingleton:
         """Get the name of the currently loaded model."""
         return cls._current_model_name
 
+def _whisper_api_rejects_word_timestamps(response) -> bool:
+    """True when the server failed because word-level timestamps are unsupported."""
+    if response is None or response.status_code == 200:
+        return False
+    try:
+        body = (response.text or '').lower()
+    except Exception:
+        return False
+    return (
+        'word timestamp' in body
+        or 'timestamps not supported' in body
+        or 'timestamp_granularities' in body
+    )
+
+
 class Transcriber:
     def __init__(self):
         # Model is now managed by singleton
@@ -685,16 +700,15 @@ class Transcriber:
             if api_key:
                 headers['Authorization'] = f'Bearer {api_key}'
 
-            form_data = {
+            form_data_base = {
                 'model': model,
                 'response_format': 'verbose_json',
-                'timestamp_granularities[]': ['segment', 'word'],
             }
             language = (whisper_settings.get('language') or 'en').strip().lower()
             if language and language != 'auto':
-                form_data['language'] = language
+                form_data_base['language'] = language
             if initial_prompt:
-                form_data['prompt'] = initial_prompt
+                form_data_base['prompt'] = initial_prompt
 
             # Defensive: refuse to upload tiny or missing files. Avoids
             # remote "empty audio" / decode failures when preprocessing
@@ -717,38 +731,69 @@ class Transcriber:
             # servers; cloud metadata and downgrades refused per-hop).
             # safe_post does not retry; wrap in a small backoff loop so
             # transient upstream blips do not fail a full transcription.
+            # Some servers (e.g. OpenVINO Model Server) reject word timestamps;
+            # retry once with segment-only granularity.
             response = None
             max_attempts = 2
-            for attempt in range(max_attempts):
-                try:
-                    with open(transcribe_path, 'rb') as audio_file:
-                        response = safe_post(
-                            url,
-                            trust=URLTrust.OPERATOR_CONFIGURED,
-                            timeout=HTTP_TIMEOUT_WHISPER,
-                            max_redirects=HTTP_MAX_REDIRECTS_API,
-                            files={'file': (os.path.basename(transcribe_path), audio_file)},
-                            data=form_data,
-                            headers=headers,
+            granularity_modes = (
+                ['segment', 'word'],
+                ['segment'],
+            )
+            for gran_idx, granularities in enumerate(granularity_modes):
+                form_data = {
+                    **form_data_base,
+                    'timestamp_granularities[]': granularities,
+                }
+                for attempt in range(max_attempts):
+                    try:
+                        with open(transcribe_path, 'rb') as audio_file:
+                            response = safe_post(
+                                url,
+                                trust=URLTrust.OPERATOR_CONFIGURED,
+                                timeout=HTTP_TIMEOUT_WHISPER,
+                                max_redirects=HTTP_MAX_REDIRECTS_API,
+                                files={'file': (os.path.basename(transcribe_path), audio_file)},
+                                data=form_data,
+                                headers=headers,
+                            )
+                    except SSRFError as exc:
+                        logger.warning(f"Whisper API URL blocked: {exc}")
+                        return None
+                    except requests.RequestException as exc:
+                        logger.warning(
+                            "Whisper API attempt %d/%d failed: %s",
+                            attempt + 1, max_attempts, exc,
                         )
-                except SSRFError as exc:
-                    logger.warning(f"Whisper API URL blocked: {exc}")
-                    return None
-                except requests.RequestException as exc:
+                        response = None
+                        continue
+                    if response.status_code < 500:
+                        break
                     logger.warning(
-                        "Whisper API attempt %d/%d failed: %s",
-                        attempt + 1, max_attempts, exc,
+                        "Whisper API attempt %d/%d returned %d",
+                        attempt + 1, max_attempts, response.status_code,
                     )
-                    response = None
-                    continue
-                if response.status_code < 500:
-                    break
-                logger.warning(
-                    "Whisper API attempt %d/%d returned %d",
-                    attempt + 1, max_attempts, response.status_code,
-                )
 
-            if response is None or response.status_code >= 400:
+                if response is None:
+                    return None
+                if response.status_code == 200:
+                    break
+                if gran_idx == 0 and _whisper_api_rejects_word_timestamps(response):
+                    logger.warning(
+                        "Whisper API does not support word timestamps; "
+                        "retrying with segment-only timestamps"
+                    )
+                    continue
+                if response.status_code >= 400:
+                    logger.error(
+                        "Whisper API transcription failed: HTTP %d %s",
+                        response.status_code,
+                        (response.text or '')[:300],
+                    )
+                    return None
+            else:
+                return None
+
+            if response is None or response.status_code != 200:
                 return None
 
             # Parse verbose_json response
