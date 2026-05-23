@@ -601,8 +601,14 @@ class WhisperModelSingleton:
         """Get the name of the currently loaded model."""
         return cls._current_model_name
 
+
 def _whisper_api_rejects_word_timestamps(response) -> bool:
-    """True when the server failed because word-level timestamps are unsupported."""
+    """True when the server failed because word-level timestamps are unsupported.
+
+    OpenAI proper returns the rejection as HTTP 400; OpenVINO Model Server
+    surfaces the same condition as a 5xx with a MediaPipe error string. Detect
+    by body-text marker so both shapes route into the segment-only fallback.
+    """
     if response is None or response.status_code == 200:
         return False
     try:
@@ -732,8 +738,10 @@ class Transcriber:
             # servers; cloud metadata and downgrades refused per-hop).
             # safe_post does not retry; wrap in a small backoff loop so
             # transient upstream blips do not fail a full transcription.
-            # Some servers (e.g. OpenVINO Model Server) reject word timestamps;
-            # retry once with segment-only granularity.
+            # Some OpenAI-compatible servers (OpenVINO Model Server, older
+            # faster-whisper-server builds) reject ['segment','word'] outright;
+            # outer loop retries once with segment-only granularity if the
+            # response body signals that rejection.
             response = None
             max_attempts = 2
             granularity_modes = (

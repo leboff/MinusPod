@@ -953,10 +953,11 @@ def get_processing_episodes():
 @api.route('/feeds/<slug>/episodes/<episode_id>/cancel', methods=['POST'])
 @log_request
 def cancel_episode_processing(slug, episode_id):
-    """Cancel/reset an episode stuck in processing status."""
+    """Cancel an episode that is processing OR queued."""
     from cancel import cancel_processing
 
     db = get_database()
+    status_service = get_status_service()
 
     episode = db.get_episode(slug, episode_id)
     if not episode:
@@ -965,11 +966,15 @@ def cancel_episode_processing(slug, episode_id):
     status_service = get_status_service()
 
     if episode['status'] != EpisodeStatus.PROCESSING:
-        # Queued (waiting on the lock): drop it from the display queue and close
-        # its auto_process_queue row so the background worker won't pick it up.
-        removed = status_service.remove_queued_episode(slug, episode_id)
-        closed = db.close_queue_rows_for_episode(slug, episode_id)
-        if not removed and not closed:
+        # Queued (waiting on the lock): close the DB queue row first so the
+        # background worker stops seeing it as pending, then drop from the
+        # display queue. Reversing this order would leave a window between
+        # the display-queue write and the DB write in which the worker could
+        # pick up the row and start processing it after the user clicked
+        # Cancel.
+        closed_db_rows = db.close_queue_rows_for_episode(slug, episode_id)
+        removed_from_display = status_service.remove_queued_episode(slug, episode_id)
+        if not removed_from_display and not closed_db_rows:
             return error_response(
                 f"Episode is not processing or queued (status: {episode['status']})",
                 400
@@ -1003,7 +1008,8 @@ def cancel_episode_processing(slug, episode_id):
             logger.warning(f"Could not release processing queue: {e}")
     # else: thread will handle DB reset, file cleanup, and queue release
 
-    # Clear any stale queue state for this episode (display queue + DB queue rows).
+    # Belt-and-suspenders: clear any stale display-queue / auto_process_queue
+    # entry for this episode so a follow-up enqueue starts from a clean slate.
     status_service.remove_queued_episode(slug, episode_id)
     db.close_queue_rows_for_episode(slug, episode_id)
 

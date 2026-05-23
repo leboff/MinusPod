@@ -12,7 +12,7 @@ info:
     - Monitor system status and trigger cleanup operations
     - Manage cross-episode ad patterns with network and podcast scope
     - Submit corrections to improve ad detection accuracy
-  version: 2.5.13
+  version: 2.5.18
   contact:
     name: MinusPod
   license:
@@ -1146,15 +1146,19 @@ paths:
         - Processing
       summary: Cancel episode processing
       description: |
-        Cancel an episode stuck in processing status and reset it to pending.
-        Use this when an episode is stuck due to a crashed worker or other issues.
+        Cancel a running or queued episode. If the episode is processing, the
+        worker thread is signalled to stop and the row is reset to pending. If
+        the episode is queued (waiting on the processing lock), it is dropped
+        from the display queue and its `auto_process_queue` row is closed so
+        the background worker will not pick it up. Returns 400 only when the
+        episode is neither processing nor queued.
       operationId: cancelEpisodeProcessing
       parameters:
         - $ref: '#/components/parameters/slug'
         - $ref: '#/components/parameters/episode_id'
       responses:
         '200':
-          description: Episode processing canceled
+          description: Episode canceled (running) or removed from queue (queued)
           content:
             application/json:
               schema:
@@ -1162,12 +1166,15 @@ paths:
                 properties:
                   message:
                     type: string
+                    description: |
+                      "Episode canceled and reset to pending" (running) or
+                      "Episode removed from queue" (queued).
                   episodeId:
                     type: string
                   slug:
                     type: string
         '400':
-          description: Episode is not in processing status
+          description: Episode is neither processing nor queued
           content:
             application/json:
               schema:
@@ -2844,6 +2851,15 @@ paths:
                     Minimum post-transcript tail gap that the VAD detector
                     will cut when no postroll marker already covers it.
                   example: 3.0
+                audioBitrate:
+                  type: object
+                  properties:
+                    value:
+                      type: string
+                      enum: ['64k', '96k', '128k', '192k', '256k']
+                      description: Output bitrate used when re-encoding processed audio.
+                    isDefault:
+                      type: boolean
                 autoProcessEnabled:
                   type: boolean
                   description: Enable automatic processing of new episodes when feeds refresh
@@ -2863,6 +2879,11 @@ paths:
                   maximum: 0.95
                   description: Minimum confidence threshold to cut an ad from audio. Lower = more aggressive (removes more potential ads), higher = more conservative
                   example: 0.80
+                audioBitrate:
+                  type: string
+                  enum: ['64k', '96k', '128k', '192k', '256k']
+                  description: Output bitrate used when re-encoding processed audio.
+                  example: 128k
                 llmProvider:
                   type: string
                   description: LLM provider to use (anthropic, openrouter, openai-compatible, ollama)
@@ -3484,6 +3505,11 @@ paths:
                     type: integer
                     minimum: 0
                     maximum: 3650
+                  originalRetentionDays:
+                    type: integer
+                    minimum: 1
+                    maximum: 3650
+                    description: Days to retain the pre-cut original copy of each episode. Defaults to retentionDays when never set; the server clamps to retentionDays on save so an original cannot outlive its processed peer.
                   enabled:
                     type: boolean
     put:
@@ -3504,6 +3530,11 @@ paths:
                   minimum: 0
                   maximum: 3650
                   description: Days to retain processed audio. 0 disables retention.
+                originalRetentionDays:
+                  type: integer
+                  minimum: 1
+                  maximum: 3650
+                  description: Optional. Days to retain the pre-cut original copy. Server clamps to retentionDays. When omitted, the existing value is preserved.
       responses:
         '200':
           description: Retention updated
@@ -3513,6 +3544,8 @@ paths:
                 type: object
                 properties:
                   retentionDays:
+                    type: integer
+                  originalRetentionDays:
                     type: integer
                   enabled:
                     type: boolean
@@ -4872,6 +4905,14 @@ components:
               format: float
             isDefault:
               type: boolean
+        audioBitrate:
+          type: object
+          properties:
+            value:
+              type: string
+              enum: ['64k', '96k', '128k', '192k', '256k']
+            isDefault:
+              type: boolean
         autoProcessEnabled:
           type: object
           properties:
@@ -4997,6 +5038,9 @@ components:
             vadGapTailMinSeconds:
               type: number
               format: float
+            audioBitrate:
+              type: string
+              enum: ['64k', '96k', '128k', '192k', '256k']
             autoProcessEnabled:
               type: boolean
             maxFeedEpisodes:

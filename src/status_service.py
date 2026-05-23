@@ -278,7 +278,7 @@ class StatusService:
         self._notify_subscribers()
 
     def remove_queued_episode(self, slug: str, episode_id: str) -> bool:
-        """Remove an episode from the queue. Returns True if it was present."""
+        """Drop an episode from the display queue. Returns True if it was present."""
         with self._status_lock:
             status = self._read_status_file()
             queued = status.get('queued_episodes', [])

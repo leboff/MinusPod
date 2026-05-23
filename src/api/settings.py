@@ -491,6 +491,7 @@ def _apply_provider_fields(db, data):
 
     On any provider-affecting change: clear cached json_format probe, force a
     fresh client, probe again, refresh pricing in a background thread, and
+    (only when the new provider's catalog probe returns a non-empty list)
     prune any saved model ID that the new provider does not advertise.
     """
     provider_changed = False
@@ -535,12 +536,24 @@ def _apply_provider_fields(db, data):
             client.probe_json_format_support()
         threading.Thread(target=force_refresh_pricing, daemon=True).start()
 
-        # Prune saved model IDs that the new provider does not advertise.
-        # Otherwise selections from a prior catalog (e.g. OpenRouter-style
-        # tags carrying into Ollama Cloud) survive the switch and fail at
-        # request time with not_found_error. Reset to provider-aware defaults.
+        # Prune saved model IDs that the new provider does not advertise so
+        # selections from a prior catalog (e.g. OpenRouter-style tags
+        # carrying into Ollama Cloud) do not survive the switch and fail at
+        # request time with not_found_error.
+        #
+        # The SDKs swallow auth 401, network 5xx, and unreachable-host
+        # errors and return []. Treating an empty list as "every prior
+        # model is invalid" wiped claude_model, verification_model, and
+        # chapters_model on any provider save with a misconfigured key.
         try:
             advertised = {m.id for m in client.list_models()}
+        except ValueError as e:
+            logger.info("Provider catalog unavailable after switch: %s", e)
+            advertised = set()
+        except Exception:
+            logger.exception("Failed to fetch model catalog after provider change")
+            advertised = set()
+        if advertised:
             for setting_key in ('claude_model', 'verification_model', 'chapters_model'):
                 current = db.get_setting(setting_key)
                 if current and current not in advertised:
@@ -549,8 +562,11 @@ def _apply_provider_fields(db, data):
                         setting_key, current,
                     )
                     db.reset_setting(setting_key)
-        except Exception:
-            logger.exception("Failed to prune stale model selections after provider change")
+        else:
+            logger.warning(
+                "Skipping model prune after provider change: new provider's "
+                "catalog probe returned empty (likely auth or network failure)"
+            )
     # The TTL cache backing get_effective_base_url / get_effective_provider
     # lags writes by up to 5s. Without this invalidation, the GET /settings
     # response that fires right after this PUT returns the pre-write value,
@@ -994,19 +1010,47 @@ def list_networks():
 @api.route('/settings/retention', methods=['GET'])
 @log_request
 def get_retention_settings():
-    """Get retention configuration."""
+    """Get retention configuration.
+
+    `originalRetentionDays` defaults to whatever `retentionDays` is when the
+    operator has never set it explicitly; that keeps the two values matched
+    by default and lets `retention_days` changes propagate without forcing
+    the operator to touch both fields.
+    """
     db = get_database()
     retention_days = int(db.get_setting('retention_days') or '30')
+    original_raw = db.get_setting('original_retention_days')
+    original_retention_days = (
+        int(original_raw) if original_raw else retention_days
+    )
     return json_response({
         'retentionDays': retention_days,
+        'originalRetentionDays': original_retention_days,
         'enabled': retention_days > 0,
     })
+
+
+def _clamp_original_retention(retention_days: int, original: int) -> int:
+    """Clamp `original` so an original cannot outlive its processed peer.
+
+    When retention is disabled (`retention_days == 0`), there is nothing
+    to clamp to; the operator's stored original value is kept as-is.
+    Otherwise the original is capped at `retention_days`.
+    """
+    if retention_days <= 0:
+        return original
+    return min(original, retention_days)
 
 
 @api.route('/settings/retention', methods=['PUT'])
 @log_request
 def update_retention_settings():
-    """Update retention configuration."""
+    """Update retention configuration.
+
+    Server-side clamp: `originalRetentionDays` is capped to `retentionDays`
+    because an original outliving its processed file would be orphaned the
+    moment the next cleanup pass resets the episode.
+    """
     data = request.get_json()
     if not data or 'retentionDays' not in data:
         return error_response('retentionDays is required', 400)
@@ -1019,8 +1063,24 @@ def update_retention_settings():
     db.set_setting('retention_days', str(days), is_default=False)
     logger.info(f"Updated retention_days to {days}")
 
+    # original_retention_days is optional; absent => match retention_days.
+    original_days = days  # response default
+    if 'originalRetentionDays' in data:
+        original = data['originalRetentionDays']
+        if not isinstance(original, int) or original < 1 or original > 3650:
+            return error_response(
+                'originalRetentionDays must be an integer between 1 and 3650', 400
+            )
+        # Clamp; never let original outlive processed.
+        original_days = _clamp_original_retention(days, original)
+        db.set_setting(
+            'original_retention_days', str(original_days), is_default=False
+        )
+        logger.info(f"Updated original_retention_days to {original_days}")
+
     return json_response({
         'retentionDays': days,
+        'originalRetentionDays': original_days,
         'enabled': days > 0,
     })
 
