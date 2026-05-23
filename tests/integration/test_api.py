@@ -108,6 +108,8 @@ class TestSettingsEndpoint:
         assert 'whisperApiKeyConfigured' in data
         assert isinstance(data['whisperApiKeyConfigured'], bool)
         assert 'whisperApiModel' in data
+        assert 'whisperApiSkipFlac' in data
+        assert isinstance(data['whisperApiSkipFlac']['value'], bool)
 
     def test_update_whisper_backend_roundtrip(self, app_client):
         """PUT /settings/ad-detection saves whisper backend, GET returns it."""
@@ -118,6 +120,7 @@ class TestSettingsEndpoint:
                 'whisperBackend': 'openai-api',
                 'whisperApiBaseUrl': 'http://localhost:8765/v1',
                 'whisperApiModel': 'whisper-large-v3',
+                'whisperApiSkipFlac': True,
             }),
             content_type='application/json',
         )
@@ -129,6 +132,7 @@ class TestSettingsEndpoint:
         assert data['whisperBackend']['value'] == 'openai-api'
         assert data['whisperApiBaseUrl']['value'] == 'http://localhost:8765/v1'
         assert data['whisperApiModel']['value'] == 'whisper-large-v3'
+        assert data['whisperApiSkipFlac']['value'] is True
 
     def test_update_whisper_backend_invalid_value(self, app_client):
         """PUT /settings/ad-detection rejects invalid whisper backend."""

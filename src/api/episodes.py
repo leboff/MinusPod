@@ -963,6 +963,8 @@ def cancel_episode_processing(slug, episode_id):
     if not episode:
         return error_response('Episode not found', 404)
 
+    status_service = get_status_service()
+
     if episode['status'] != EpisodeStatus.PROCESSING:
         # Queued (waiting on the lock): close the DB queue row first so the
         # background worker stops seeing it as pending, then drop from the

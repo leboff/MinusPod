@@ -11,7 +11,7 @@ interface TranscriptionSectionProps {
   whisperBackend: WhisperBackend;
   onWhisperBackendChange: (backend: WhisperBackend) => void;
   apiConfig: WhisperApiConfig;
-  onApiConfigChange: (field: keyof WhisperApiConfig, value: string) => void;
+  onApiConfigChange: (field: keyof WhisperApiConfig, value: string | boolean) => void;
   providersState: ProvidersResponse | null;
   onProviderKeySave: (provider: ProviderName, apiKey: string) => Promise<void>;
   onProviderKeyClear: (provider: ProviderName) => Promise<void>;
@@ -154,6 +154,25 @@ function TranscriptionSection({
               <p className="mt-1 text-sm text-muted-foreground">
                 Model identifier sent to the API (e.g. whisper-1, whisper-large-v3-turbo)
               </p>
+            </div>
+
+            <div className="flex items-start gap-3">
+              <input
+                type="checkbox"
+                id="whisperApiSkipFlac"
+                checked={apiConfig.skipFlac}
+                onChange={(e) => onApiConfigChange('skipFlac', e.target.checked)}
+                className="mt-1 h-4 w-4 rounded border-input"
+              />
+              <div>
+                <label htmlFor="whisperApiSkipFlac" className="block text-sm font-medium text-foreground">
+                  Skip FLAC compression
+                </label>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Skip FLAC compression before upload. Enable for self-hosted Whisper servers
+                  (e.g. whisper.cpp on localhost) to avoid an extra encode pass.
+                </p>
+              </div>
             </div>
           </>
         )}

@@ -2793,6 +2793,13 @@ paths:
                   type: string
                   description: Model name to use with the Whisper API (only used when whisperBackend is openai-api)
                   example: whisper-1
+                whisperApiSkipFlac:
+                  type: boolean
+                  description: |
+                    Skip FLAC compression before upload to the Whisper API. Enable for
+                    self-hosted Whisper servers (e.g. whisper.cpp on localhost) to avoid
+                    an extra encode pass. Can also be set via WHISPER_API_SKIP_FLAC env var.
+                  example: false
                 whisperLanguage:
                   type: string
                   description: |
@@ -4838,6 +4845,14 @@ components:
               description: Model name to use with the Whisper API
             isDefault:
               type: boolean
+        whisperApiSkipFlac:
+          type: object
+          properties:
+            value:
+              type: boolean
+              description: Skip FLAC compression before upload to the Whisper API
+            isDefault:
+              type: boolean
         whisperLanguage:
           type: object
           properties:
@@ -5005,6 +5020,8 @@ components:
               type: string
             whisperApiModel:
               type: string
+            whisperApiSkipFlac:
+              type: boolean
             whisperLanguage:
               type: string
             whisperComputeType:

@@ -181,6 +181,25 @@ class TestPartialUpdatePreservesOtherFields:
         assert db.get_setting('whisper_api_base_url') == ''
         assert db.get_setting('whisper_api_model') == 'whisper-1'
 
+    def test_whisper_api_skip_flac_persists_as_bool_string(self, client):
+        db = database.Database()
+
+        response = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'whisperApiSkipFlac': True}),
+            content_type='application/json',
+        )
+        assert response.status_code == 200, response.data
+        assert db.get_setting('whisper_api_skip_flac') == 'true'
+
+        response = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'whisperApiSkipFlac': False}),
+            content_type='application/json',
+        )
+        assert response.status_code == 200, response.data
+        assert db.get_setting('whisper_api_skip_flac') == 'false'
+
 
 class TestProviderChangeModelPruning:
     """Provider-change pruning at _apply_provider_fields must NOT reset saved
