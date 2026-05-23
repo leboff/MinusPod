@@ -5,6 +5,7 @@ from unittest.mock import patch, MagicMock
 
 from transcriber import (
     Transcriber, _get_whisper_settings, _get_whisper_compute_type,
+    _whisper_api_rejects_word_timestamps,
     calculate_optimal_chunk_duration,
 )
 from config import (
@@ -60,12 +61,13 @@ class TestGetWhisperSettings:
         assert settings['backend'] == WHISPER_BACKEND_LOCAL
 
     def test_reads_all_settings_in_one_call(self):
-        """Verify all 4 settings are read from a single Database instance."""
+        """Verify all whisper settings are read from a single Database instance."""
         mock_db = _mock_db_with_settings({
             'whisper_backend': WHISPER_BACKEND_API,
             'whisper_api_base_url': 'http://example.com/v1',
             'whisper_api_key': 'key123',
             'whisper_api_model': 'model-x',
+            'whisper_api_skip_flac': 'true',
         })
         with patch('database.Database', return_value=mock_db) as mock_cls:
             settings = _get_whisper_settings()
@@ -74,6 +76,27 @@ class TestGetWhisperSettings:
         assert settings['api_base_url'] == 'http://example.com/v1'
         assert settings['api_key'] == 'key123'
         assert settings['api_model'] == 'model-x'
+        assert settings['skip_flac'] == 'true'
+
+    @patch.dict(os.environ, {'WHISPER_API_SKIP_FLAC': 'true'})
+    def test_falls_back_to_skip_flac_env_var(self):
+        with patch('database.Database', side_effect=Exception("no db")):
+            settings = _get_whisper_settings()
+        assert settings['skip_flac'] == 'true'
+
+
+class TestWhisperApiWordTimestampDetection:
+    def test_detects_ovms_word_timestamp_error(self):
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.text = 'Word timestamps not supported for this model'
+        assert _whisper_api_rejects_word_timestamps(resp) is True
+
+    def test_ignores_unrelated_400(self):
+        resp = MagicMock()
+        resp.status_code = 400
+        resp.text = 'invalid model name'
+        assert _whisper_api_rejects_word_timestamps(resp) is False
 
 
 class TestApiChunkDuration:
@@ -226,6 +249,79 @@ class TestTranscribeViaApi:
                 assert 'Authorization' not in call_kwargs.kwargs['headers']
         finally:
             os.unlink(temp_path)
+
+    def test_retries_without_word_timestamps_when_server_rejects_words(self):
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            f.write(b'fake' * 512)
+            temp_path = f.name
+
+        try:
+            reject_words = MagicMock()
+            reject_words.status_code = 400
+            reject_words.text = 'Word timestamps not supported for this model'
+
+            ok_response = MagicMock()
+            ok_response.status_code = 200
+            ok_response.json.return_value = {
+                'segments': [
+                    {'start': 0.0, 'end': 5.0, 'text': ' Hello', 'words': []},
+                ],
+            }
+
+            with patch('transcriber.safe_post', side_effect=[reject_words, ok_response]) as mock_post:
+                transcriber = Transcriber()
+                transcriber.preprocess_audio = MagicMock(return_value=None)
+                result = transcriber._transcribe_via_api(
+                    temp_path, whisper_settings=self._make_settings()
+                )
+
+            assert result is not None
+            assert len(result) == 1
+            assert mock_post.call_count == 2
+            assert mock_post.call_args_list[0].kwargs['data']['timestamp_granularities[]'] == [
+                'segment', 'word',
+            ]
+            assert mock_post.call_args_list[1].kwargs['data']['timestamp_granularities[]'] == [
+                'segment',
+            ]
+        finally:
+            os.unlink(temp_path)
+
+    def test_skip_flac_skips_ffmpeg_and_uploads_wav(self):
+        with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:
+            f.write(b'fake' * 512)
+            temp_path = f.name
+
+        preprocessed_path = None
+        try:
+            with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as preprocessed:
+                preprocessed.write(b'preprocessed audio' * 128)
+                preprocessed_path = preprocessed.name
+
+            mock_response = MagicMock()
+            mock_response.status_code = 200
+            mock_response.json.return_value = {'segments': []}
+
+            def fake_tracked_run(cmd, **kwargs):
+                if '-c:a' in cmd and 'flac' in cmd:
+                    raise AssertionError('FLAC compression should be skipped when skip_flac=true')
+                return MagicMock(returncode=0)
+
+            with patch('transcriber.tracked_run', side_effect=fake_tracked_run), \
+                 patch('transcriber.safe_post', return_value=mock_response) as mock_post:
+                transcriber = Transcriber()
+                transcriber.preprocess_audio = MagicMock(return_value=preprocessed_path)
+                transcriber._transcribe_via_api(
+                    temp_path,
+                    whisper_settings=self._make_settings(skip_flac='true'),
+                )
+
+            uploaded_name = mock_post.call_args.kwargs['files']['file'][0]
+            assert uploaded_name.endswith('.wav')
+        finally:
+            os.unlink(temp_path)
+            if preprocessed_path and os.path.exists(preprocessed_path):
+                os.unlink(preprocessed_path)
 
     def test_filters_empty_segments(self):
         with tempfile.NamedTemporaryFile(suffix='.wav', delete=False) as f:

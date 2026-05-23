@@ -116,23 +116,31 @@ class SettingsMixin:
             model_default = DEFAULT_MODEL
             chapters_default = CHAPTERS_MODEL
 
+        # Env-backed keys (config.ENV_BACKED_SETTINGS) resolve their default from
+        # the live env var via env_backed_default(), so reset matches the value
+        # the schema initializer re-syncs on restart. Keys handled there:
+        # whisper_model, whisper_language, llm_provider, openai_base_url,
+        # processing_soft/hard_timeout_seconds, audio_bitrate.
+        from config import ENV_BACKED_KEYS, env_backed_default
+        if key in ENV_BACKED_KEYS:
+            self.set_setting(key, env_backed_default(key), is_default=True)
+            return True
+
         defaults = {
             'system_prompt': DEFAULT_SYSTEM_PROMPT,
             'verification_prompt': DEFAULT_VERIFICATION_PROMPT,
             'retention_period_minutes': os.environ.get('RETENTION_PERIOD', '1440'),
             'claude_model': model_default,
             'verification_model': model_default,
-            'whisper_model': os.environ.get('WHISPER_MODEL', 'small'),
             'vtt_transcripts_enabled': 'true',
             'chapters_enabled': 'true',
             'chapters_model': chapters_default,
-            'llm_provider': os.environ.get('LLM_PROVIDER', 'anthropic'),
-            'openai_base_url': os.environ.get('OPENAI_BASE_URL', 'http://localhost:8000/v1'),
             'min_cut_confidence': '0.80',
             'auto_process_enabled': 'true',
             'whisper_backend': os.environ.get('WHISPER_BACKEND', 'local'),
             'whisper_api_base_url': os.environ.get('WHISPER_API_BASE_URL', ''),
             'whisper_api_model': os.environ.get('WHISPER_API_MODEL', 'whisper-1'),
+            'whisper_api_skip_flac': os.environ.get('WHISPER_API_SKIP_FLAC', 'false'),
             'whisper_compute_type': os.environ.get('WHISPER_COMPUTE_TYPE', 'auto'),
             'vad_gap_detection_enabled': os.environ.get('VAD_GAP_DETECTION_ENABLED', 'true'),
             'vad_gap_start_min_seconds': os.environ.get('VAD_GAP_START_MIN_SECONDS', '3.0'),

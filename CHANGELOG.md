@@ -75,6 +75,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Kitchen-sink ad patterns no longer over-match.** A sponsor pattern whose `text_template` happened to name several unrelated brands (the canonical example was Pattern #211, a JRE row that listed Athletic Greens, AG1, BetterHelp, Squarespace, ZipRecruiter, Raycon, Manscaped, and Stamps.com in one comma-separated blob) generated high-weight TF-IDF tokens for every brand, so any episode that mentioned two or three of them tripped the 0.70 cosine threshold and got marked as the row's sponsor. Two fixes ship together: (1) `PatternService.merge_similar_patterns()` now calls `find_foreign_sponsors()` on the chosen combined template before writing the merged row; if the template names any active sponsor outside the consolidated sponsor's name and aliases, the merge aborts and the source rows stay intact. (2) A one-shot migration (`_cleanup_multi_sponsor_patterns`) scans active `ad_patterns` on boot and disables any row whose template names two or more foreign sponsors, with `disabled_reason` set to a 2.5.7-tagged explanation. Idempotent against already-inactive rows; flipping `is_active=1` re-enables a row at any time.
 - **Pattern-edit textarea no longer shrinks when entering edit mode.** `PatternDetailModal.tsx` was rendering edit mode as a `<textarea rows={4}>` while view mode was a flexible `<div>` with `p-3` and `whitespace-pre-wrap`. For any template longer than four wrapped lines (so, most of them), clicking Edit visibly collapsed the box. The textarea now uses `min-h-[160px] max-h-[400px]` with `resize-y` and matches the view-mode padding, so the box stays approximately the same height when toggling modes and the user can drag it taller if needed.
+## [Unreleased]
+
+### Added
+
+- **Remote Whisper API: optional "Skip FLAC compression" toggle.** When using an OpenAI-compatible Whisper backend, MinusPod normally re-encodes preprocessed WAV to FLAC before upload to avoid 413 errors on size-limited APIs. Self-hosted servers (e.g. whisper.cpp on localhost) can now skip that extra ffmpeg pass via Settings → Transcription or the `WHISPER_API_SKIP_FLAC=true` env var.
+- **Remote Whisper API: automatic fallback when word timestamps are unsupported.** Servers such as OpenVINO Model Server that reject `timestamp_granularities[]=word` (e.g. `Word timestamps not supported for this model`) are retried with segment-only timestamps. Ad boundary refinement falls back to segment-level cuts when word data is absent.
 
 ## [2.5.6] - 2026-05-19
 

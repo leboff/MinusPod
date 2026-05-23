@@ -77,7 +77,7 @@ function Settings() {
   const [openaiBaseUrl, setOpenaiBaseUrl] = useState('http://localhost:8000/v1');
   const [whisperBackend, setWhisperBackend] = useState<WhisperBackend>('local');
   const [whisperApiConfig, setWhisperApiConfig] = useState<WhisperApiConfig>({
-    baseUrl: '', model: 'whisper-1',
+    baseUrl: '', model: 'whisper-1', skipFlac: false,
   });
   const [whisperLanguage, setWhisperLanguage] = useState('en');
   const [whisperComputeType, setWhisperComputeType] = useState('auto');
@@ -253,6 +253,7 @@ function Settings() {
       setWhisperApiConfig({
         baseUrl: settings.whisperApiBaseUrl?.value || '',
         model: settings.whisperApiModel?.value || 'whisper-1',
+        skipFlac: settings.whisperApiSkipFlac?.value ?? false,
       });
       setWhisperLanguage(settings.whisperLanguage?.value || 'en');
       setWhisperComputeType(settings.whisperComputeType?.value || 'auto');
@@ -295,6 +296,7 @@ function Settings() {
     if (whisperBackend !== (settings.whisperBackend?.value || 'local')) payload.whisperBackend = whisperBackend;
     if (whisperApiConfig.baseUrl !== (settings.whisperApiBaseUrl?.value || '')) payload.whisperApiBaseUrl = whisperApiConfig.baseUrl;
     if (whisperApiConfig.model !== (settings.whisperApiModel?.value || 'whisper-1')) payload.whisperApiModel = whisperApiConfig.model;
+    if (whisperApiConfig.skipFlac !== (settings.whisperApiSkipFlac?.value ?? false)) payload.whisperApiSkipFlac = whisperApiConfig.skipFlac;
     if (whisperLanguage !== (settings.whisperLanguage?.value || 'en')) payload.whisperLanguage = whisperLanguage;
     if (whisperComputeType !== (settings.whisperComputeType?.value || 'auto')) payload.whisperComputeType = whisperComputeType;
     if (audioBitrate !== (settings.audioBitrate?.value || '128k')) payload.audioBitrate = audioBitrate;
@@ -314,7 +316,7 @@ function Settings() {
     if (Object.keys(computeChangedFields()).length > 0) return true;
     return podcastIndexApiKey !== '' && podcastIndexApiSecret !== '';
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [systemPrompt, verificationPrompt, reviewer, selectedModel, verificationModel, whisperModel, autoProcessEnabled, maxFeedEpisodes, onlyExposeProcessedDefault, audioBitrate, vttTranscriptsEnabled, chaptersEnabled, chaptersModel, minCutConfidence, llmProvider, openaiBaseUrl, whisperBackend, whisperApiConfig.baseUrl, whisperApiConfig.model, whisperLanguage, whisperComputeType, podcastIndexApiKey, podcastIndexApiSecret, settings]);
+  }, [systemPrompt, verificationPrompt, reviewer, selectedModel, verificationModel, whisperModel, autoProcessEnabled, maxFeedEpisodes, onlyExposeProcessedDefault, audioBitrate, vttTranscriptsEnabled, chaptersEnabled, chaptersModel, minCutConfidence, llmProvider, openaiBaseUrl, whisperBackend, whisperApiConfig.baseUrl, whisperApiConfig.model, whisperApiConfig.skipFlac, whisperLanguage, whisperComputeType, podcastIndexApiKey, podcastIndexApiSecret, settings]);
 
   const updateMutation = useMutation({
     mutationFn: () => {

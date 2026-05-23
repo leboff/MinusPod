@@ -19,6 +19,7 @@ from config import (
     WHISPER_COMPUTE_TYPES, WHISPER_COMPUTE_TYPE_DEFAULT,
     OPENROUTER_BASE_URL,
     PROVIDER_ANTHROPIC, PROVIDER_OPENROUTER, PROVIDER_OPENAI_COMPATIBLE, PROVIDER_OLLAMA,
+    ALLOWED_AUDIO_BITRATES, env_backed_default,
 )
 from pricing_fetcher import force_refresh_pricing
 from llm_client import (
@@ -117,8 +118,8 @@ def get_settings():
     verification_model = _setting_value(settings, 'verification_model', DEFAULT_MODEL)
     chapters_model = _setting_value(settings, 'chapters_model', CHAPTERS_MODEL)
 
-    # Get whisper model setting (defaults to env var or 'small')
-    default_whisper_model = os.environ.get('WHISPER_MODEL', 'small')
+    # Get whisper model setting (env-backed; see config.ENV_BACKED_SETTINGS)
+    default_whisper_model = env_backed_default('whisper_model')
     whisper_model = _setting_value(settings, 'whisper_model', default_whisper_model)
 
     # Get boolean settings
@@ -158,7 +159,8 @@ def get_settings():
     default_whisper_backend = os.environ.get('WHISPER_BACKEND', 'local')
     default_whisper_api_base_url = os.environ.get('WHISPER_API_BASE_URL', '')
     default_whisper_api_model = os.environ.get('WHISPER_API_MODEL', 'whisper-1')
-    default_whisper_language = os.environ.get('WHISPER_LANGUAGE') or 'en'
+    default_whisper_api_skip_flac = os.environ.get('WHISPER_API_SKIP_FLAC', 'false').lower() in ('true', '1', 'yes')
+    default_whisper_language = env_backed_default('whisper_language')
     default_whisper_compute_type = os.environ.get('WHISPER_COMPUTE_TYPE', WHISPER_COMPUTE_TYPE_DEFAULT)
     default_vad_gap_enabled = os.environ.get('VAD_GAP_DETECTION_ENABLED', 'true').lower() in ('true', '1', 'yes')
 
@@ -175,6 +177,10 @@ def get_settings():
     whisper_api_base_url = _setting_value(settings, 'whisper_api_base_url', default_whisper_api_base_url)
     whisper_api_key = _setting_value(settings, 'whisper_api_key', '')
     whisper_api_model = _setting_value(settings, 'whisper_api_model', default_whisper_api_model)
+    whisper_api_skip_flac_raw = _setting_value(
+        settings, 'whisper_api_skip_flac', str(default_whisper_api_skip_flac).lower()
+    )
+    whisper_api_skip_flac = str(whisper_api_skip_flac_raw).lower() in ('true', '1', 'yes')
     whisper_language = _setting_value(settings, 'whisper_language', default_whisper_language)
     whisper_compute_type = _setting_value(settings, 'whisper_compute_type', default_whisper_compute_type)
     vad_gap_enabled_raw = _setting_value(settings, 'vad_gap_detection_enabled', str(default_vad_gap_enabled).lower())
@@ -189,6 +195,10 @@ def get_settings():
     vad_gap_start = _db_float('vad_gap_start_min_seconds', default_vad_gap_start)
     vad_gap_mid = _db_float('vad_gap_mid_min_seconds', default_vad_gap_mid)
     vad_gap_tail = _db_float('vad_gap_tail_min_seconds', default_vad_gap_tail)
+
+    # Audio output bitrate (env-backed; see config.ENV_BACKED_SETTINGS)
+    audio_bitrate = _setting_value(
+        settings, 'audio_bitrate', env_backed_default('audio_bitrate'))
 
     # Per-stage LLM tunables: resolved value (env > DB > default) and env-override status.
     from config import (
@@ -269,12 +279,14 @@ def get_settings():
         'whisperApiBaseUrl': _sv('whisper_api_base_url', whisper_api_base_url),
         'whisperApiKeyConfigured': bool(whisper_api_key),
         'whisperApiModel': _sv('whisper_api_model', whisper_api_model),
+        'whisperApiSkipFlac': _sv('whisper_api_skip_flac', whisper_api_skip_flac),
         'whisperLanguage': _sv('whisper_language', whisper_language),
         'whisperComputeType': _sv('whisper_compute_type', whisper_compute_type),
         'vadGapDetectionEnabled': _sv('vad_gap_detection_enabled', vad_gap_enabled),
         'vadGapStartMinSeconds': _sv('vad_gap_start_min_seconds', vad_gap_start),
         'vadGapMidMinSeconds': _sv('vad_gap_mid_min_seconds', vad_gap_mid),
         'vadGapTailMinSeconds': _sv('vad_gap_tail_min_seconds', vad_gap_tail),
+        'audioBitrate': _sv('audio_bitrate', audio_bitrate),
         'apiKeyConfigured': api_key_configured,
         'retentionDays': int(db.get_setting('retention_days') or '30'),
         'stageTunables': tunables_payload,
@@ -300,18 +312,20 @@ def get_settings():
             'chaptersEnabled': True,
             'chaptersModel': CHAPTERS_MODEL,
             'minCutConfidence': 0.80,
-            'llmProvider': os.environ.get('LLM_PROVIDER', PROVIDER_ANTHROPIC),
-            'openaiBaseUrl': os.environ.get('OPENAI_BASE_URL', 'http://localhost:8000/v1'),
+            'llmProvider': env_backed_default('llm_provider'),
+            'openaiBaseUrl': env_backed_default('openai_base_url'),
             'openrouterBaseUrl': OPENROUTER_BASE_URL,
             'whisperBackend': default_whisper_backend,
             'whisperApiBaseUrl': default_whisper_api_base_url,
             'whisperApiModel': default_whisper_api_model,
+            'whisperApiSkipFlac': default_whisper_api_skip_flac,
             'whisperLanguage': default_whisper_language,
             'whisperComputeType': default_whisper_compute_type,
             'vadGapDetectionEnabled': default_vad_gap_enabled,
             'vadGapStartMinSeconds': default_vad_gap_start,
             'vadGapMidMinSeconds': default_vad_gap_mid,
             'vadGapTailMinSeconds': default_vad_gap_tail,
+            'audioBitrate': env_backed_default('audio_bitrate'),
         }
     })
 
@@ -339,6 +353,7 @@ def update_ad_detection_settings():
         _apply_model_fields,
         _apply_processing_flags,
         _apply_min_cut_confidence,
+        _apply_audio_fields,
         _apply_provider_fields,
         _apply_whisper_fields,
         _apply_vad_gap_fields,
@@ -458,6 +473,19 @@ def _apply_min_cut_confidence(db, data):
     return None
 
 
+def _apply_audio_fields(db, data):
+    """Persist the audio output bitrate, restricted to the allowed encode set."""
+    if 'audioBitrate' in data:
+        val = str(data['audioBitrate']).strip()
+        if val not in ALLOWED_AUDIO_BITRATES:
+            return json_response(
+                {'error': f'audioBitrate must be one of: {", ".join(ALLOWED_AUDIO_BITRATES)}'}, 400
+            )
+        db.set_setting('audio_bitrate', val, is_default=False)
+        logger.info(f"Updated audio bitrate to: {val}")
+    return None
+
+
 def _apply_provider_fields(db, data):
     """Persist LLM provider + base URL + key, then run post-change side effects.
 
@@ -566,6 +594,15 @@ def _apply_whisper_fields(db, data):
             return json_response({'error': 'whisperApiModel must be a non-empty string (max 200 chars)'}, 400)
         db.set_setting('whisper_api_model', model_val, is_default=False)
         logger.info(f"Updated whisper API model to: {model_val}")
+
+    if 'whisperApiSkipFlac' in data:
+        raw = data['whisperApiSkipFlac']
+        if isinstance(raw, bool):
+            skip_flac = raw
+        else:
+            skip_flac = str(raw).strip().lower() in ('true', '1', 'yes')
+        db.set_setting('whisper_api_skip_flac', 'true' if skip_flac else 'false', is_default=False)
+        logger.info(f"Updated whisper API skip FLAC to: {skip_flac}")
 
     if 'whisperLanguage' in data:
         lang_val = str(data['whisperLanguage']).strip().lower()
@@ -777,6 +814,7 @@ def reset_ad_detection_settings():
 
     db.reset_setting('min_cut_confidence')
     db.reset_setting('auto_process_enabled')
+    db.reset_setting('audio_bitrate')
 
     # Reset LLM provider settings back to env var defaults
     db.reset_setting('llm_provider')
@@ -789,6 +827,7 @@ def reset_ad_detection_settings():
     db.reset_setting('whisper_api_base_url')
     db.reset_setting('whisper_api_key')
     db.reset_setting('whisper_api_model')
+    db.reset_setting('whisper_api_skip_flac')
     db.reset_setting('whisper_compute_type')
     db.reset_setting('vad_gap_detection_enabled')
     db.reset_setting('vad_gap_start_min_seconds')
