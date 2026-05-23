@@ -171,6 +171,8 @@ LLM_TIMEOUT_LOCAL = 600.0            # Ollama / local models (10 min)
 LLM_RETRY_MAX_RETRIES = 3            # Default retries for cloud APIs
 LLM_RETRY_MAX_RETRIES_LOCAL = 2      # Fewer retries for local (each is slow)
 AD_DETECTION_MAX_TOKENS = int(os.environ.get('AD_DETECTION_MAX_TOKENS', '4096'))
+AD_DETECTION_PARALLEL_WINDOWS = int(os.environ.get('AD_DETECTION_PARALLEL_WINDOWS', '4'))
+# 0 = unlimited (one thread per window), 1 = sequential, N = cap at N concurrent windows
 
 # ============================================================
 # Outbound HTTP
