@@ -77,6 +77,42 @@ class TestGetEpisodeDescription:
         assert RSSParser._get_episode_description(entry) == "iTunes subtitle"
 
 
+class TestExtractEpisodesDuration:
+    """extract_episodes should surface itunes:duration as `duration` seconds."""
+
+    def _feed(self, duration_tag: str) -> str:
+        dur = f"<itunes:duration>{duration_tag}</itunes:duration>" if duration_tag is not None else ""
+        return f"""<?xml version="1.0"?>
+<rss version="2.0" xmlns:itunes="http://www.itunes.com/dtds/podcast-1.0.dtd">
+  <channel>
+    <title>Test</title>
+    <item>
+      <title>Ep 1</title>
+      <enclosure url="https://example.com/ep1.mp3" type="audio/mpeg" length="1" />
+      <guid>ep1</guid>
+      {dur}
+    </item>
+  </channel>
+</rss>"""
+
+    def test_parses_hhmmss(self):
+        eps = RSSParser().extract_episodes(self._feed("01:00:30"))
+        assert len(eps) == 1
+        assert eps[0]['duration'] == 3630.0
+
+    def test_parses_plain_seconds(self):
+        eps = RSSParser().extract_episodes(self._feed("1800"))
+        assert eps[0]['duration'] == 1800.0
+
+    def test_missing_duration_is_none(self):
+        eps = RSSParser().extract_episodes(self._feed(None))
+        assert eps[0]['duration'] is None
+
+    def test_unparseable_duration_is_none(self):
+        eps = RSSParser().extract_episodes(self._feed("not-a-time"))
+        assert eps[0]['duration'] is None
+
+
 class TestXxeStructuredEvent:
     """parse_feed must emit an xml_forbidden_construct log event when
     defusedxml rejects DOCTYPE/ENTITY/EXTERNAL references, rather than

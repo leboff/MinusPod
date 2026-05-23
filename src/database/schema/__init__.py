@@ -390,6 +390,9 @@ class SchemaMixin:
             # databases created at 2.0.19 the column was INTEGER DEFAULT 0;
             # the conversion step below rewrites that to match.
             ('only_expose_processed_episodes', 'INTEGER'),
+            # Per-podcast auto-process skip filters. NULL/empty means no filter.
+            ('skip_title_regex', 'TEXT'),
+            ('skip_max_duration_minutes', 'INTEGER'),
         ]
         for col, definition in podcasts_migrations:
             self._add_column_if_missing(conn, 'podcasts', col, definition, pod_cols)

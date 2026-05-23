@@ -18,7 +18,7 @@ from defusedxml.ElementTree import fromstring as defused_fromstring
 from utils.circuit_breaker import CircuitBreaker, CircuitBreakerOpen
 from utils.episode_paths import episode_public_url
 from utils.feed_guid import compute_feed_guid
-from utils.time import parse_iso_datetime
+from utils.time import parse_iso_datetime, parse_timestamp
 from utils.url import SSRFError
 from utils.http import safe_url_for_log
 from utils.safe_http import ResponseTooLargeError, URLTrust, read_response_capped, safe_get
@@ -1187,6 +1187,15 @@ class RSSParser:
                 except Exception as e:
                     logger.warning(f"Episode iTunes category mapping failed: {e}")
 
+                # Episode duration in seconds from itunes:duration, when present.
+                # None when absent or unparseable.
+                duration_seconds = None
+                if 'itunes_duration' in entry:
+                    try:
+                        duration_seconds = parse_timestamp(entry.itunes_duration)
+                    except (ValueError, TypeError):
+                        duration_seconds = None
+
                 episodes.append({
                     'id': self.generate_episode_id(episode_url, entry.get('id', '')),
                     'url': episode_url,
@@ -1195,6 +1204,7 @@ class RSSParser:
                     'description': self._get_episode_description(entry),
                     'artwork_url': artwork_url,
                     'episode_number': episode_number,
+                    'duration': duration_seconds,
                     'tags': ep_tags,
                 })
 

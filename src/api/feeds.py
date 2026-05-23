@@ -1,6 +1,7 @@
 """Feed routes: /feeds/* endpoints."""
 import logging
 import os
+import re
 import time
 import xml.etree.ElementTree as ET  # defusedxml has no SubElement/tostring, so keep ET for OPML export only
 from typing import Optional
@@ -403,6 +404,8 @@ def get_feed(slug):
         'autoProcessOverride': auto_process_override_result,
         'maxEpisodes': podcast.get('max_episodes'),
         'onlyExposeProcessedEpisodes': _deserialize_nullable_bool(podcast.get('only_expose_processed_episodes')),
+        'skipTitleRegex': podcast.get('skip_title_regex'),
+        'skipMaxDurationMinutes': podcast.get('skip_max_duration_minutes'),
     })
 
 
@@ -451,6 +454,28 @@ def update_feed(slug):
         updates['only_expose_processed_episodes'] = _serialize_nullable_bool(
             data['onlyExposeProcessedEpisodes'])
 
+    # Per-podcast skip filters. Empty/None clears the filter (stored as NULL).
+    if 'skipTitleRegex' in data:
+        regex_val = data['skipTitleRegex']
+        regex_val = str(regex_val).strip() if regex_val is not None else ''
+        if regex_val:
+            try:
+                re.compile(regex_val)
+            except re.error as e:
+                return error_response(f'Invalid regex: {e}', 400)
+        updates['skip_title_regex'] = regex_val or None
+
+    if 'skipMaxDurationMinutes' in data:
+        max_min = data['skipMaxDurationMinutes']
+        if max_min is not None:
+            try:
+                max_min = int(max_min)
+            except (TypeError, ValueError):
+                return error_response('skipMaxDurationMinutes must be an integer', 400)
+            if max_min < 1:
+                max_min = None
+        updates['skip_max_duration_minutes'] = max_min
+
     if not updates:
         return error_response('No valid fields to update', 400)
 
@@ -486,6 +511,8 @@ def update_feed(slug):
             'networkIdOverride': podcast.get('network_id_override'),
             'maxEpisodes': podcast.get('max_episodes'),
             'onlyExposeProcessedEpisodes': _deserialize_nullable_bool(podcast.get('only_expose_processed_episodes')),
+            'skipTitleRegex': podcast.get('skip_title_regex'),
+            'skipMaxDurationMinutes': podcast.get('skip_max_duration_minutes'),
             'feedUrl': f"{base_url}/{slug}"
         })
     except Exception as e:

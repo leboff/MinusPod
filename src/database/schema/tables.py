@@ -32,6 +32,8 @@ CREATE TABLE IF NOT EXISTS podcasts (
     skip_second_pass INTEGER DEFAULT 0,
     max_episodes INTEGER,
     only_expose_processed_episodes INTEGER,
+    skip_title_regex TEXT,
+    skip_max_duration_minutes INTEGER,
     tags TEXT NOT NULL DEFAULT '[]',
     user_tags TEXT NOT NULL DEFAULT '[]',
     created_at TEXT DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),

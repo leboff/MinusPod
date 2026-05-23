@@ -167,6 +167,8 @@ export interface UpdateFeedPayload {
   autoProcessOverride?: boolean | null;
   maxEpisodes?: number | null;
   onlyExposeProcessedEpisodes?: boolean | null;
+  skipTitleRegex?: string | null;
+  skipMaxDurationMinutes?: number | null;
 }
 
 export interface Network {

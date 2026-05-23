@@ -475,6 +475,17 @@ paths:
                     - boolean
                     - 'null'
                   description: Per-feed override. true hides non-processed episodes; false shows everything; null falls back to the global onlyExposeProcessedDefault setting.
+                skipTitleRegex:
+                  type:
+                    - string
+                    - 'null'
+                  description: Per-feed auto-process skip filter. Episodes whose title matches this regex (searched anywhere in the title) are not auto-processed. Empty/null disables the filter. Rejected with 400 if the pattern does not compile.
+                skipMaxDurationMinutes:
+                  type:
+                    - integer
+                    - 'null'
+                  minimum: 1
+                  description: Per-feed auto-process skip filter. Episodes longer than this many minutes are not auto-processed. Episodes with unknown duration are still processed. Null/0 disables the filter.
       responses:
         '200':
           description: Feed updated successfully
@@ -4542,6 +4553,17 @@ components:
             - boolean
             - 'null'
           description: Per-feed override for hiding upstream episodes whose status is not 'processed' from the served RSS feed. Null means use the global onlyExposeProcessedDefault setting. true/false override the global for this feed (issue #181).
+        skipTitleRegex:
+          type:
+            - string
+            - 'null'
+          description: Per-feed auto-process skip filter. Episodes whose title matches this regex (searched anywhere in the title) are not auto-processed. Null/empty disables the filter.
+        skipMaxDurationMinutes:
+          type:
+            - integer
+            - 'null'
+          minimum: 1
+          description: Per-feed auto-process skip filter. Episodes longer than this many minutes are not auto-processed. Episodes with unknown duration are still processed. Null disables the filter.
 
     EpisodeSummary:
       type: object

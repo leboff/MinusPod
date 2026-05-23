@@ -1,5 +1,6 @@
 """Feed management: get_feed_map, invalidate_feed_cache, refresh_rss_feed, refresh_all_feeds."""
 import logging
+import re
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from email.utils import parsedate_to_datetime
@@ -69,6 +70,35 @@ def get_parsed_feed(slug: str, source_url: str):
         _parsed_feeds_cache.set(slug, parsed)
         return parsed
     return None
+
+
+def should_skip_auto_process(podcast: dict, ep: dict):
+    """Decide whether an episode should be skipped from auto-processing.
+
+    Applies the per-podcast skip filters (title regex, max duration). Returns
+    a (skip, reason) tuple where reason is a short label for logging when
+    skip is True, else (False, None). Pure and side-effect free.
+
+    Unknown episode duration is never skipped on the length filter -- only
+    skip when we know the duration exceeds the configured maximum. A stored
+    regex that fails to compile is treated as no filter rather than raising,
+    so a bad pattern can never break the refresh loop.
+    """
+    title_regex = (podcast.get('skip_title_regex') or '').strip()
+    if title_regex:
+        try:
+            if re.search(title_regex, ep.get('title') or ''):
+                return True, 'title regex'
+        except re.error:
+            pass
+
+    max_minutes = podcast.get('skip_max_duration_minutes')
+    if max_minutes:
+        duration = ep.get('duration')
+        if duration is not None and duration > max_minutes * 60:
+            return True, 'max duration'
+
+    return False, None
 
 
 def refresh_rss_feed(slug: str, feed_url: str, force: bool = False):
@@ -258,6 +288,14 @@ def refresh_rss_feed(slug: str, feed_url: str, force: bool = False):
                             is_recent = False
 
                     if is_recent:
+                        # Apply per-podcast skip filters before queueing.
+                        skip, reason = should_skip_auto_process(podcast, ep)
+                        if skip:
+                            refresh_logger.debug(
+                                f"[{slug}] Skipping auto-process ({reason}): {ep.get('title')}"
+                            )
+                            continue
+
                         # New recent episode - queue for processing
                         # iso_published already calculated above for deduplication check
                         queue_id = db.queue_episode_for_processing(

@@ -24,6 +24,8 @@ function FeedDetail() {
   const [editDaiPlatform, setEditDaiPlatform] = useState('');
   const [editAutoProcessOverride, setEditAutoProcessOverride] = useState<string>('global');
   const [editMaxEpisodes, setEditMaxEpisodes] = useState<string>('');
+  const [editSkipTitleRegex, setEditSkipTitleRegex] = useState<string>('');
+  const [editSkipMaxDurationMinutes, setEditSkipMaxDurationMinutes] = useState<string>('');
 
   // Pagination state
   const [page, setPage] = useState(1);
@@ -73,7 +75,7 @@ function FeedDetail() {
   });
 
   const updateMutation = useMutation({
-    mutationFn: (data: { networkIdOverride?: string | null; daiPlatform?: string; autoProcessOverride?: boolean | null; maxEpisodes?: number | null; onlyExposeProcessedEpisodes?: boolean | null }) => updateFeed(slug!, data),
+    mutationFn: (data: { networkIdOverride?: string | null; daiPlatform?: string; autoProcessOverride?: boolean | null; maxEpisodes?: number | null; onlyExposeProcessedEpisodes?: boolean | null; skipTitleRegex?: string | null; skipMaxDurationMinutes?: number | null }) => updateFeed(slug!, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['feed', slug] });
       setIsEditingNetwork(false);
@@ -118,6 +120,8 @@ function FeedDetail() {
       setEditAutoProcessOverride('global');
     }
     setEditMaxEpisodes(feed?.maxEpisodes ? String(feed.maxEpisodes) : '');
+    setEditSkipTitleRegex(feed?.skipTitleRegex || '');
+    setEditSkipMaxDurationMinutes(feed?.skipMaxDurationMinutes ? String(feed.skipMaxDurationMinutes) : '');
     setIsEditingNetwork(true);
   };
 
@@ -130,12 +134,15 @@ function FeedDetail() {
     }
 
     const maxEp = editMaxEpisodes ? parseInt(editMaxEpisodes, 10) : null;
+    const skipMaxDur = editSkipMaxDurationMinutes ? parseInt(editSkipMaxDurationMinutes, 10) : null;
 
     updateMutation.mutate({
       networkIdOverride: editNetworkOverride || null,
       daiPlatform: editDaiPlatform || undefined,
       autoProcessOverride: autoProcessOverride,
       maxEpisodes: maxEp !== null && !isNaN(maxEp) ? Math.max(10, Math.min(maxEp, 500)) : null,
+      skipTitleRegex: editSkipTitleRegex.trim() || null,
+      skipMaxDurationMinutes: skipMaxDur !== null && !isNaN(skipMaxDur) && skipMaxDur >= 1 ? skipMaxDur : null,
     });
   };
 
@@ -261,6 +268,36 @@ function FeedDetail() {
                       max={500}
                       className="w-20 px-2 py-1 text-sm bg-secondary border border-border rounded"
                     />
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <label className="text-muted-foreground text-sm w-16 shrink-0 pt-1">Skip title:</label>
+                    <div className="flex-1 min-w-0">
+                      <input
+                        type="text"
+                        value={editSkipTitleRegex}
+                        onChange={(e) => setEditSkipTitleRegex(e.target.value)}
+                        placeholder="regex, e.g. (?i)bonus|trailer"
+                        className="w-full px-2 py-1 text-sm bg-secondary border border-border rounded"
+                      />
+                      <p className="mt-1 text-xs text-muted-foreground">Skip auto-processing episodes whose title matches this regex. Empty = no filter.</p>
+                    </div>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <label className="text-muted-foreground text-sm w-16 shrink-0 pt-1">Skip over:</label>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="number"
+                          value={editSkipMaxDurationMinutes}
+                          onChange={(e) => setEditSkipMaxDurationMinutes(e.target.value)}
+                          placeholder="0"
+                          min={0}
+                          className="w-20 px-2 py-1 text-sm bg-secondary border border-border rounded"
+                        />
+                        <span className="text-xs text-muted-foreground">minutes (empty/0 = no limit)</span>
+                      </div>
+                      <p className="mt-1 text-xs text-muted-foreground">Skip auto-processing episodes longer than this. Episodes with unknown length are still processed.</p>
+                    </div>
                   </div>
                   <div className="flex gap-2">
                     <button
