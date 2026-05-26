@@ -30,6 +30,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - The committed `calls.jsonl` rows were generated against a `SEED_SPONSORS` list that briefly excluded the `Zyn` entry (a local diff that was later reverted to match main). The system prompt for ad detection joins SEED_SPONSORS names, so the stored `prompt_hash` values do not match what current `src/utils/constants.py` would produce. A fresh `benchmark run` will therefore see zero completed rows and dispatch the full ~40k-call sweep from scratch. The committed report and per-call artifacts remain valid for review; they are just not bit-reproducible from the committed code without restoring the Zyn-removed state.
 
+## [2.5.27] - 2026-05-26
+
+### Fixed
+
+- **`openapi.yaml`: duplicate keys in the `PUT /settings/ad-detection` request body.** The request-body schema redundantly defined `audioBitrate`, `skipFlacCompression`, `adDetectionParallelWindows`, and `adReviewerParallelAds` twice -- once with the GET-response shape (`{value, isDefault}` object) and once with the actual request shape (plain string / boolean / integer). YAML parsers silently keep the last occurrence; OpenAPI validators warn or fail. The misplaced object-shape entries were copied from the response-side schema; the API only accepts plain values (e.g. `{"audioBitrate": "192k"}`), and the `_apply_audio_fields` handler in `src/api/settings.py` reads `data['audioBitrate']` directly as a string. Removed the misplaced object-shape block from the PUT request body and kept the plain-type entries. The other two locations where these fields appear (the `Settings` response schema at line 4922 with object shape, and the `Settings.defaults` sub-object at line 5078 with plain shape) are intentional and unchanged -- they describe distinct response shapes, not the request body. Original duplicate-key bug was for `audioBitrate` only; the same broken pattern was extended to the three new fields when they were added in 2.5.23. The bug went undetected because PyYAML silently keeps the last occurrence on duplicate keys -- no parse error, no warning, no CI step validated the spec. External fork user `s1shed` flagged the original `audioBitrate` duplicate (PR #287).
+
+### Added
+
+- **`tests/unit/test_openapi_spec.py`: regression guards for `openapi.yaml`.** Five test cases close the gap that let the duplicate-key bug ship: (1) the spec parses with the standard SafeLoader; (2) a `StrictDuplicateKeyLoader` subclass rejects any duplicate key inside any mapping (this would have failed the 2.5.23 branch immediately); (3) a meta-test confirms the strict loader actually raises on a known-duplicate fixture; (4) top-level shape sanity (`openapi`, `info.version`, `paths`, `components` all present); (5) the `/settings/ad-detection` PUT request body uses plain primitive types (`string`, `boolean`, `integer`) for the four fields the bug touched, not the response-side `object` wrapper. Pure stdlib + PyYAML, no new dependencies.
+
+## [2.5.26] - 2026-05-25
+
+### Fixed
+
+- **"Parallel ad reviews" knob moved to the correct UI section.** 2.5.25 placed the input in `AdReviewerSection.tsx` (the small section that controls reviewer-feedback pattern auto-updates), but the user-visible "Ad Reviewer" controls live in `ExperimentsSection.tsx` (which holds the reviewer Enable toggle, model selector, max boundary shift, and prompts). The knob is now under the same "Ad Reviewer" section that already contains the reviewer execution settings, beneath "Max boundary shift". Backend exposes the same `adReviewerParallelAds` field on the main `/settings` endpoint alongside `adDetectionParallelWindows`; the alternate `/settings/reviewer` exposure remains in place for API consumers that prefer the dedicated endpoint.
+
+## [2.5.25] - 2026-05-25
+
+### Added
+
+- **Parallel reviewer passes via a separate `AD_REVIEWER_PARALLEL_ADS` knob.** 2.5.23 parallelized ad detection and verification windows; the Ad Reviewer was left sequential because it iterates one ad at a time rather than one window at a time. `AdReviewer._review_inner` now runs the accepted and resurrection pools through a shared `_run_review_batch` helper that uses `ThreadPoolExecutor` with bounded concurrency, position-indexed merge to keep verdicts in input order, and an early-exit single-item path that skips the executor entirely. Default 4 concurrent reviews; validated [1, 32]. Exposed in the Settings page under the existing "Ad Reviewer" section as a new "Parallel ad reviews" numeric input, and on the API via `GET/PUT /settings/reviewer` as `parallelAds` / `parallelAdsDefault`. Setting to 1 preserves the original sequential behavior. Registered in `ENV_BACKED_SETTINGS` so the same data-preserving migration story from 2.5.23 applies (UI customizations survive env changes).
+
+## [2.5.24] - 2026-05-25
+
+### Fixed
+
+- **"Skip FLAC compression" toggle is now visible in Settings regardless of the active Whisper backend.** 2.5.23 placed the control inside the `whisperBackend === WHISPER_BACKENDS.OPENAI_API` conditional block, which made the toggle invisible on Local-Whisper deployments and prevented operators from configuring the preference before switching backends. Moved the toggle out of the conditional so it always renders under the Transcription section. The help text now states explicitly that the setting only takes effect when the Whisper backend is set to API; on Local Whisper the toggle stores the preference for later use but is a no-op because no audio is uploaded to begin with.
+
+## [2.5.23] - 2026-05-25
+
+### Added
+
+- **"Skip FLAC compression" toggle for the Whisper API path.** A new boolean setting `skipFlacCompression` (DB key `skip_flac_compression`, env `SKIP_FLAC_COMPRESSION`, default false) lets operators running self-hosted Whisper servers that accept WAV directly skip the intermediate FFmpeg FLAC encode in `Transcriber._transcribe_via_api`. Default-off preserves the existing FLAC compression so public OpenAI / OpenRouter endpoints stay under their upload size limits. Exposed in Settings under Transcription -> Whisper API and via `/settings` GET / `/settings/ad-detection` PUT. Reset returns to false.
+- **Parallel ad-detection windows.** Replaces the sequential per-window LLM loop in `AdDetector.detect_ads()` and `run_verification_detection()` with a `ThreadPoolExecutor` so independent transcript windows run concurrently through the LLM. New `adDetectionParallelWindows` setting (DB key `ad_detection_parallel_windows`, env `AD_DETECTION_PARALLEL_WINDOWS`, default 4, validated range [1, 32]). 1 preserves the original sequential behavior; higher values cut wall-clock detection time at the cost of concurrent load on the LLM provider. Exposed in the Settings page under LLM Tunables in a new "Detection Concurrency" block and via `/settings` GET / `/settings/ad-detection` PUT. Window-position-indexed merge keeps the resulting ads in transcript order even when futures complete out of order. A per-call progress lock prevents two completed workers from racing on the progress callback.
+
+### Changed
+
+- **`ENV_BACKED_SETTINGS` registry with data-preserving migration.** Central registry in `src/config.py` describes every setting whose default comes from an environment variable: `(db_key, env_var, fallback, validator)`. First four entries: `llm_provider`, `audio_bitrate`, `skip_flac_compression`, `ad_detection_parallel_windows`. On every boot `_run_env_backed_settings_migration` in `src/database/schema/__init__.py` (a) ensures a `schema_migrations` table exists, (b) logs an audit line per registered key, (c) runs a one-shot corrective gate that flips `is_default` to 0 for any row where `is_default=1` but value diverges from env, **preserving the stored value** -- no deployer's DB loses data, (d) re-syncs `is_default=1` rows to the current env on every subsequent boot. Stops the recurrence pattern that caused issue #266 (env-backed settings ignored after first DB init) without overwriting customizations made via the UI.
+- **Per-episode token accumulator is now lock-protected instead of thread-local.** `_episode_accumulator` in `src/llm_client.py` was a `threading.local()` so different gunicorn threads couldn't corrupt each other. With ad-detection windows now running on a `ThreadPoolExecutor`, worker threads need to contribute to the same totals as the main thread. The accumulator is now a single `_EpisodeAccumulator` object guarded by `threading.Lock`. Single-episode isolation is enforced upstream by the fcntl flock on `.processing_queue.lock`, so the global accumulator is correct in practice. The existing `start_episode_token_tracking()` / `get_episode_token_totals()` public API is unchanged.
+
 ## [2.5.22] - 2026-05-25
 
 ### Fixed

@@ -61,6 +61,7 @@ function Settings() {
     maxShift: 60,
     reviewPrompt: '',
     resurrectPrompt: '',
+    parallelAds: 4,
   });
   const [selectedModel, setSelectedModel] = useState('');
   const [verificationModel, setVerificationModel] = useState('');
@@ -69,6 +70,7 @@ function Settings() {
   const [maxFeedEpisodes, setMaxFeedEpisodes] = useState(300);
   const [onlyExposeProcessedDefault, setOnlyExposeProcessedDefault] = useState(false);
   const [audioBitrate, setAudioBitrate] = useState('128k');
+  const [skipFlacCompression, setSkipFlacCompression] = useState(false);
   const [vttTranscriptsEnabled, setVttTranscriptsEnabled] = useState(true);
   const [chaptersEnabled, setChaptersEnabled] = useState(true);
   const [chaptersModel, setChaptersModel] = useState('');
@@ -238,6 +240,7 @@ function Settings() {
         maxShift: settings.reviewMaxBoundaryShift?.value ?? 60,
         reviewPrompt: settings.reviewPrompt?.value || '',
         resurrectPrompt: settings.resurrectPrompt?.value || '',
+        parallelAds: settings.adReviewerParallelAds?.value ?? settings.defaults?.adReviewerParallelAds ?? 4,
       });
       setSelectedModel(settings.claudeModel?.value || '');
       setVerificationModel(settings.verificationModel?.value || '');
@@ -246,6 +249,7 @@ function Settings() {
       setMaxFeedEpisodes(settings.maxFeedEpisodes?.value ?? 300);
       setOnlyExposeProcessedDefault(settings.onlyExposeProcessedDefault?.value ?? false);
       setAudioBitrate(settings.audioBitrate?.value || '128k');
+      setSkipFlacCompression(settings.skipFlacCompression?.value ?? false);
       setVttTranscriptsEnabled(settings.vttTranscriptsEnabled?.value ?? true);
       setChaptersEnabled(settings.chaptersEnabled?.value ?? true);
       setChaptersModel(settings.chaptersModel?.value || '');
@@ -289,6 +293,7 @@ function Settings() {
     if (reviewer.enabled !== (settings.enableAdReview?.value ?? d.enableAdReview)) payload.enableAdReview = reviewer.enabled;
     if (reviewer.model !== (settings.reviewModel?.value || 'same_as_pass')) payload.reviewModel = reviewer.model;
     if (reviewer.maxShift !== (settings.reviewMaxBoundaryShift?.value ?? d.reviewMaxBoundaryShift)) payload.reviewMaxBoundaryShift = reviewer.maxShift;
+    if (reviewer.parallelAds !== (settings.adReviewerParallelAds?.value ?? settings.defaults?.adReviewerParallelAds ?? 4)) payload.adReviewerParallelAds = reviewer.parallelAds;
     if (selectedModel !== (settings.claudeModel?.value || '')) payload.claudeModel = selectedModel;
     if (verificationModel !== (settings.verificationModel?.value || '')) payload.verificationModel = verificationModel;
     if (whisperModel !== (settings.whisperModel?.value || 'small')) payload.whisperModel = whisperModel;
@@ -301,6 +306,7 @@ function Settings() {
     if (whisperLanguage !== (settings.whisperLanguage?.value || 'en')) payload.whisperLanguage = whisperLanguage;
     if (whisperComputeType !== (settings.whisperComputeType?.value || 'auto')) payload.whisperComputeType = whisperComputeType;
     if (audioBitrate !== (settings.audioBitrate?.value || '128k')) payload.audioBitrate = audioBitrate;
+    if (skipFlacCompression !== (settings.skipFlacCompression?.value ?? false)) payload.skipFlacCompression = skipFlacCompression;
 
     if (autoProcessEnabled !== (settings.autoProcessEnabled?.value ?? d.autoProcessEnabled)) payload.autoProcessEnabled = autoProcessEnabled;
     if (onlyExposeProcessedDefault !== (settings.onlyExposeProcessedDefault?.value ?? d.onlyExposeProcessedDefault)) payload.onlyExposeProcessedDefault = onlyExposeProcessedDefault;
@@ -317,7 +323,7 @@ function Settings() {
     if (Object.keys(computeChangedFields()).length > 0) return true;
     return podcastIndexApiKey !== '' && podcastIndexApiSecret !== '';
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [systemPrompt, verificationPrompt, reviewer, selectedModel, verificationModel, whisperModel, autoProcessEnabled, maxFeedEpisodes, onlyExposeProcessedDefault, audioBitrate, vttTranscriptsEnabled, chaptersEnabled, chaptersModel, minCutConfidence, llmProvider, openaiBaseUrl, whisperBackend, whisperApiConfig.baseUrl, whisperApiConfig.model, whisperLanguage, whisperComputeType, podcastIndexApiKey, podcastIndexApiSecret, settings]);
+  }, [systemPrompt, verificationPrompt, reviewer, selectedModel, verificationModel, whisperModel, autoProcessEnabled, maxFeedEpisodes, onlyExposeProcessedDefault, audioBitrate, skipFlacCompression, vttTranscriptsEnabled, chaptersEnabled, chaptersModel, minCutConfidence, llmProvider, openaiBaseUrl, whisperBackend, whisperApiConfig.baseUrl, whisperApiConfig.model, whisperLanguage, whisperComputeType, podcastIndexApiKey, podcastIndexApiSecret, settings]);
 
   const updateMutation = useMutation({
     mutationFn: () => {
@@ -478,6 +484,9 @@ function Settings() {
           defaults={settings.stageTunableDefaults}
           llmProvider={llmProvider}
           onUpdate={(payload) => tunableMutation.mutate(payload)}
+          parallelWindows={settings.adDetectionParallelWindows?.value ?? settings.defaults?.adDetectionParallelWindows ?? 4}
+          parallelWindowsIsDefault={settings.adDetectionParallelWindows?.isDefault ?? true}
+          parallelWindowsDefault={settings.defaults?.adDetectionParallelWindows ?? 4}
         />
       )}
 
@@ -499,6 +508,8 @@ function Settings() {
         onWhisperLanguageChange={setWhisperLanguage}
         whisperComputeType={whisperComputeType}
         onWhisperComputeTypeChange={setWhisperComputeType}
+        skipFlacCompression={skipFlacCompression}
+        onSkipFlacCompressionChange={setSkipFlacCompression}
         softTimeoutMinutes={softTimeoutMinutes}
         hardTimeoutMinutes={hardTimeoutMinutes}
         softMinMinutes={processingTimeouts ? Math.max(1, Math.ceil(processingTimeouts.limits.softMin / 60)) : 5}

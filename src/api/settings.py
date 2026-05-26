@@ -20,6 +20,13 @@ from config import (
     OPENROUTER_BASE_URL,
     PROVIDER_ANTHROPIC, PROVIDER_OPENROUTER, PROVIDER_OPENAI_COMPATIBLE, PROVIDER_OLLAMA,
     ALLOWED_AUDIO_BITRATES, DEFAULT_AUDIO_BITRATE,
+    AD_DETECTION_PARALLEL_WINDOWS_DEFAULT,
+    AD_DETECTION_PARALLEL_WINDOWS_MIN,
+    AD_DETECTION_PARALLEL_WINDOWS_MAX,
+    AD_REVIEWER_PARALLEL_ADS_DEFAULT,
+    AD_REVIEWER_PARALLEL_ADS_MIN,
+    AD_REVIEWER_PARALLEL_ADS_MAX,
+    coerce_bool_setting,
 )
 from pricing_fetcher import force_refresh_pricing
 from llm_client import (
@@ -192,6 +199,35 @@ def get_settings():
     vad_gap_tail = _db_float('vad_gap_tail_min_seconds', default_vad_gap_tail)
 
     audio_bitrate = _setting_value(settings, 'audio_bitrate', DEFAULT_AUDIO_BITRATE)
+    default_skip_flac = os.environ.get('SKIP_FLAC_COMPRESSION', 'false')
+    skip_flac_raw = _setting_value(settings, 'skip_flac_compression', default_skip_flac)
+    skip_flac = coerce_bool_setting(skip_flac_raw)
+
+    default_parallel_windows = str(AD_DETECTION_PARALLEL_WINDOWS_DEFAULT)
+    parallel_windows_raw = _setting_value(
+        settings, 'ad_detection_parallel_windows', default_parallel_windows
+    )
+    try:
+        parallel_windows = int(parallel_windows_raw)
+    except (ValueError, TypeError):
+        parallel_windows = AD_DETECTION_PARALLEL_WINDOWS_DEFAULT
+    parallel_windows = max(
+        AD_DETECTION_PARALLEL_WINDOWS_MIN,
+        min(AD_DETECTION_PARALLEL_WINDOWS_MAX, parallel_windows),
+    )
+
+    default_reviewer_parallel = str(AD_REVIEWER_PARALLEL_ADS_DEFAULT)
+    reviewer_parallel_raw = _setting_value(
+        settings, 'ad_reviewer_parallel_ads', default_reviewer_parallel
+    )
+    try:
+        reviewer_parallel = int(reviewer_parallel_raw)
+    except (ValueError, TypeError):
+        reviewer_parallel = AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    reviewer_parallel = max(
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        min(AD_REVIEWER_PARALLEL_ADS_MAX, reviewer_parallel),
+    )
 
     # Per-stage LLM tunables: resolved value (env > DB > default) and env-override status.
     from config import (
@@ -279,6 +315,9 @@ def get_settings():
         'vadGapMidMinSeconds': _sv('vad_gap_mid_min_seconds', vad_gap_mid),
         'vadGapTailMinSeconds': _sv('vad_gap_tail_min_seconds', vad_gap_tail),
         'audioBitrate': _sv('audio_bitrate', audio_bitrate),
+        'skipFlacCompression': _sv('skip_flac_compression', skip_flac),
+        'adDetectionParallelWindows': _sv('ad_detection_parallel_windows', parallel_windows),
+        'adReviewerParallelAds': _sv('ad_reviewer_parallel_ads', reviewer_parallel),
         'apiKeyConfigured': api_key_configured,
         'retentionDays': int(db.get_setting('retention_days') or '30'),
         'stageTunables': tunables_payload,
@@ -317,6 +356,9 @@ def get_settings():
             'vadGapMidMinSeconds': default_vad_gap_mid,
             'vadGapTailMinSeconds': default_vad_gap_tail,
             'audioBitrate': DEFAULT_AUDIO_BITRATE,
+            'skipFlacCompression': coerce_bool_setting(os.environ.get('SKIP_FLAC_COMPRESSION', 'false')),
+            'adDetectionParallelWindows': AD_DETECTION_PARALLEL_WINDOWS_DEFAULT,
+            'adReviewerParallelAds': AD_REVIEWER_PARALLEL_ADS_DEFAULT,
         }
     })
 
@@ -474,6 +516,48 @@ def _apply_audio_fields(db, data):
             )
         db.set_setting('audio_bitrate', val, is_default=False)
         logger.info(f"Updated audio bitrate to: {val}")
+
+    if 'adDetectionParallelWindows' in data:
+        try:
+            n = int(data['adDetectionParallelWindows'])
+        except (ValueError, TypeError):
+            return json_response(
+                {'error': 'adDetectionParallelWindows must be an integer'}, 400
+            )
+        if not (AD_DETECTION_PARALLEL_WINDOWS_MIN <= n <= AD_DETECTION_PARALLEL_WINDOWS_MAX):
+            return json_response(
+                {
+                    'error': (
+                        f'adDetectionParallelWindows must be between '
+                        f'{AD_DETECTION_PARALLEL_WINDOWS_MIN} and '
+                        f'{AD_DETECTION_PARALLEL_WINDOWS_MAX}'
+                    )
+                },
+                400,
+            )
+        db.set_setting('ad_detection_parallel_windows', str(n), is_default=False)
+        logger.info(f"Updated ad_detection_parallel_windows to: {n}")
+
+    if 'adReviewerParallelAds' in data:
+        try:
+            n = int(data['adReviewerParallelAds'])
+        except (ValueError, TypeError):
+            return json_response(
+                {'error': 'adReviewerParallelAds must be an integer'}, 400
+            )
+        if not (AD_REVIEWER_PARALLEL_ADS_MIN <= n <= AD_REVIEWER_PARALLEL_ADS_MAX):
+            return json_response(
+                {
+                    'error': (
+                        f'adReviewerParallelAds must be between '
+                        f'{AD_REVIEWER_PARALLEL_ADS_MIN} and '
+                        f'{AD_REVIEWER_PARALLEL_ADS_MAX}'
+                    )
+                },
+                400,
+            )
+        db.set_setting('ad_reviewer_parallel_ads', str(n), is_default=False)
+        logger.info(f"Updated ad_reviewer_parallel_ads to: {n}")
     return None
 
 
@@ -625,6 +709,11 @@ def _apply_whisper_fields(db, data):
         except Exception:
             logger.exception("Failed to mark Whisper model for reload after compute_type change")
         logger.info(f"Updated whisper compute type to: {ct_val}")
+
+    if 'skipFlacCompression' in data:
+        enabled = coerce_bool_setting(data['skipFlacCompression'])
+        db.set_setting('skip_flac_compression', 'true' if enabled else 'false', is_default=False)
+        logger.info(f"Updated skip_flac_compression to: {enabled}")
     return None
 
 
@@ -813,6 +902,8 @@ def reset_ad_detection_settings():
     db.reset_setting('min_cut_confidence')
     db.reset_setting('auto_process_enabled')
     db.reset_setting('audio_bitrate')
+    db.reset_setting('ad_detection_parallel_windows')
+    db.reset_setting('ad_reviewer_parallel_ads')
 
     # Reset LLM provider settings back to env var defaults
     db.reset_setting('llm_provider')
@@ -826,6 +917,7 @@ def reset_ad_detection_settings():
     db.reset_setting('whisper_api_key')
     db.reset_setting('whisper_api_model')
     db.reset_setting('whisper_compute_type')
+    db.reset_setting('skip_flac_compression')
     db.reset_setting('vad_gap_detection_enabled')
     db.reset_setting('vad_gap_start_min_seconds')
     db.reset_setting('vad_gap_mid_min_seconds')
@@ -1373,12 +1465,28 @@ def test_webhook(webhook_id):
 @log_request
 def get_reviewer_settings():
     """Return the ad-reviewer auto-update settings."""
+    from config import (
+        AD_REVIEWER_PARALLEL_ADS_DEFAULT,
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        AD_REVIEWER_PARALLEL_ADS_MAX,
+    )
     db = get_database()
+    parallel_raw = db.get_setting('ad_reviewer_parallel_ads')
+    try:
+        parallel_ads = int(parallel_raw) if parallel_raw is not None else AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    except (TypeError, ValueError):
+        parallel_ads = AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    parallel_ads = max(
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        min(AD_REVIEWER_PARALLEL_ADS_MAX, parallel_ads),
+    )
     return json_response({
         'updatePatternsFromReviewerAdjustments': db.get_setting_bool(
             'update_patterns_from_reviewer_adjustments', default=True
         ),
         'minTrimThreshold': db.get_setting_float('min_trim_threshold', default=20.0),
+        'parallelAds': parallel_ads,
+        'parallelAdsDefault': AD_REVIEWER_PARALLEL_ADS_DEFAULT,
     })
 
 
@@ -1387,8 +1495,13 @@ def get_reviewer_settings():
 def update_reviewer_settings():
     """Update the ad-reviewer auto-update settings.
 
-    Body: {updatePatternsFromReviewerAdjustments: bool, minTrimThreshold: float}
+    Body: {updatePatternsFromReviewerAdjustments: bool, minTrimThreshold: float,
+           parallelAds: int}
     """
+    from config import (
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        AD_REVIEWER_PARALLEL_ADS_MAX,
+    )
     db = get_database()
     data = request.get_json() or {}
     if 'updatePatternsFromReviewerAdjustments' in data:
@@ -1402,6 +1515,18 @@ def update_reviewer_settings():
         if v <= 0 or v > 120:
             return error_response('minTrimThreshold must be between 1 and 120', 400)
         db.set_setting('min_trim_threshold', str(v))
+    if 'parallelAds' in data:
+        try:
+            n = int(data['parallelAds'])
+        except (TypeError, ValueError):
+            return error_response('parallelAds must be an integer', 400)
+        if not (AD_REVIEWER_PARALLEL_ADS_MIN <= n <= AD_REVIEWER_PARALLEL_ADS_MAX):
+            return error_response(
+                f'parallelAds must be between {AD_REVIEWER_PARALLEL_ADS_MIN} '
+                f'and {AD_REVIEWER_PARALLEL_ADS_MAX}',
+                400,
+            )
+        db.set_setting('ad_reviewer_parallel_ads', str(n), is_default=False)
     return get_reviewer_settings()
 
 

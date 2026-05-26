@@ -142,6 +142,9 @@ export interface Settings {
   maxFeedEpisodes: SettingValueNumber;
   onlyExposeProcessedDefault: SettingValueBoolean;
   audioBitrate: SettingValue;
+  skipFlacCompression: SettingValueBoolean;
+  adDetectionParallelWindows: SettingValueNumber;
+  adReviewerParallelAds: SettingValueNumber;
   vttTranscriptsEnabled: SettingValueBoolean;
   chaptersEnabled: SettingValueBoolean;
   chaptersModel: SettingValue;
@@ -185,6 +188,8 @@ export interface Settings {
     whisperApiModel: string;
     whisperLanguage: string;
     whisperComputeType: string;
+    adDetectionParallelWindows?: number;
+    adReviewerParallelAds?: number;
   };
 }
 
@@ -203,6 +208,9 @@ export interface UpdateSettingsPayload {
   maxFeedEpisodes?: number;
   onlyExposeProcessedDefault?: boolean;
   audioBitrate?: string;
+  skipFlacCompression?: boolean;
+  adDetectionParallelWindows?: number;
+  adReviewerParallelAds?: number;
   vttTranscriptsEnabled?: boolean;
   chaptersEnabled?: boolean;
   chaptersModel?: string;
