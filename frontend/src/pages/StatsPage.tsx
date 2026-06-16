@@ -1,4 +1,4 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip,
@@ -6,37 +6,10 @@ import {
 } from 'recharts';
 import { getDashboardStats, getStatsByDay, getStatsByPodcast, getReviewerStats } from '../api/stats';
 import { getFeeds } from '../api/feeds';
+import { feedDisplayTitle } from '../utils/feedTitle';
 import { formatTokenCount } from './settings/settingsUtils';
 import LoadingSpinner from '../components/LoadingSpinner';
-
-function useThemeColors() {
-  const [colors, setColors] = useState({ primary: '', card: '', border: '', foreground: '', muted: '' });
-  useEffect(() => {
-    function resolve(name: string) {
-      const raw = getComputedStyle(document.documentElement).getPropertyValue(name).trim();
-      return raw ? `hsl(${raw})` : '';
-    }
-    function update() {
-      const next = {
-        primary: resolve('--primary'),
-        card: resolve('--card'),
-        border: resolve('--border'),
-        foreground: resolve('--card-foreground'),
-        muted: resolve('--muted-foreground'),
-      };
-      setColors(prev =>
-        prev.primary === next.primary && prev.card === next.card && prev.border === next.border
-        && prev.foreground === next.foreground && prev.muted === next.muted
-          ? prev : next
-      );
-    }
-    update();
-    const obs = new MutationObserver(update);
-    obs.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'data-theme'] });
-    return () => obs.disconnect();
-  }, []);
-  return colors;
-}
+import { useThemeColors } from '../hooks/useThemeColors';
 
 type PodcastSortField = 'podcastTitle' | 'episodeCount' | 'totalAds' | 'avgAds' | 'avgTimeSavedSeconds' | 'avgEpisodeLengthSeconds' | 'totalCost' | 'avgTokensPerEpisode';
 
@@ -191,7 +164,7 @@ export default function StatsPage() {
           <option value="">All Podcasts</option>
           {feeds?.map((feed) => (
             <option key={feed.slug} value={feed.slug}>
-              {feed.title}
+              {feedDisplayTitle(feed)}
             </option>
           ))}
         </select>
@@ -236,6 +209,12 @@ export default function StatsPage() {
             min={`In: ${formatTokenCount(dashboard.avgInputTokens)}`}
             max={`Out: ${formatTokenCount(dashboard.avgOutputTokens)}`}
           />
+          <StatCard
+            label="Avg Audio Cues"
+            value={dashboard.avgAudioCuesDetected.toFixed(1)}
+            min={String(dashboard.minAudioCuesDetected)}
+            max={String(dashboard.maxAudioCuesDetected)}
+          />
         </div>
       )}
 
@@ -249,6 +228,10 @@ export default function StatsPage() {
           <div className="bg-card rounded-lg border border-border p-4">
             <p className="text-sm text-muted-foreground">Total Ads Removed</p>
             <p className="text-xl font-bold text-foreground">{dashboard.totalAdsRemoved}</p>
+          </div>
+          <div className="bg-card rounded-lg border border-border p-4">
+            <p className="text-sm text-muted-foreground">Total Audio Cues</p>
+            <p className="text-xl font-bold text-foreground">{dashboard.totalAudioCuesDetected}</p>
           </div>
           <div className="bg-card rounded-lg border border-border p-4">
             <p className="text-sm text-muted-foreground">Total Time Saved</p>

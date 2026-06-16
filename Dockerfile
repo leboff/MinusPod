@@ -26,7 +26,7 @@ RUN mkdir -p /app/static/ui/swagger \
 # Stage 2: Python application
 # Use CUDA runtime image - PyTorch bundles its own cuDNN/cuBLAS via pip
 # Base image CUDA only needs host driver compatibility (forward compatible)
-FROM nvidia/cuda:12.9.1-runtime-ubuntu24.04
+FROM nvidia/cuda:12.9.2-runtime-ubuntu24.04
 
 # Install Python 3.11 from deadsnakes PPA and system dependencies
 # Ubuntu 24.04 ships Python 3.12; we use deadsnakes to keep Python 3.11
@@ -129,7 +129,7 @@ EXPOSE 8000
 
 # Health check - verify the app is responding
 HEALTHCHECK --interval=30s --timeout=5s --retries=3 --start-period=30s \
-  CMD curl -f http://localhost:8000/api/v1/health || exit 1
+  CMD curl -f http://localhost:${MINUSPOD_PORT:-8000}/api/v1/health || exit 1
 
 # Run the application via entrypoint
 ENTRYPOINT ["/app/entrypoint.sh"]

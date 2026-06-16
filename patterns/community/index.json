@@ -1,8 +1,68 @@
 {
   "manifest_version": 1,
-  "published_at": "2026-05-15T20:28:05Z",
+  "published_at": "2026-06-07T19:57:40Z",
   "vocabulary_version": 1,
   "patterns": [
+    {
+      "community_id": "856da58c-7d70-4daa-a442-f15141eb1ec0",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This is Chelsea Handler from Dear Chelsea Let take a quick break with one of our favorite sponsors Vital Proteins Vital Proteins just launched their new collagen sparkling waters in three crisp refreshing flavors strawberry blossom lemon and blood orange Each can includes collagen peptides that improve skin health in as little as 30 days when sipped daily With zero grams added sugar no artificial sweeteners and a full daily dose of vitamin C it an easy enjoyable way to support your wellness goals",
+        "intro_variants": [
+          "This is Chelsea Handler from Dear Chelsea Let take a quick break with one of our favorite sponsors Vital Proteins"
+        ],
+        "outro_variants": [
+          "With zero grams added sugar no artificial sweeteners and a full daily dose of vitamin C it an easy enjoyable way to support your wellness goals"
+        ],
+        "avg_duration": null,
+        "sponsor": "Vital Proteins",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "dtc",
+          "health",
+          "supplements",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "856da58c-7d70-4daa-a442-f15141eb1ec0",
+        "version": 1,
+        "submitted_at": "2026-05-06T19:28:41Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "938f5d75-2101-4290-b792-7b2e83b5dc73",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for this show comes from Verizon Business. Verizon Small Business Days are happening from April 27th through May 10th. And it's the perfect time to get great deals for your business that include business internet, OneTalk, and a 5G phone. Find all the services and features you need to tap in and grow, including expert guidance and know-how. That's Verizon Business' commitment to helping small businesses succeed. Check out Verizon Small Business Days from April 27th through May 10th. Call today at 800-483-4428 or find out more at verizon.com slash smallbusiness.",
+        "intro_variants": [
+          "Support for this show comes from Verizon Business."
+        ],
+        "outro_variants": [
+          "Call today at 800-483-4428 or find out more at verizon.com slash smallbusiness."
+        ],
+        "avg_duration": null,
+        "sponsor": "Verizon",
+        "sponsor_aliases": [
+          "verizon.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "technology",
+          "telecom",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "938f5d75-2101-4290-b792-7b2e83b5dc73",
+        "version": 1,
+        "submitted_at": "2026-05-07T18:13:06Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
     {
       "community_id": "3c348177-fdf5-4f4f-a3de-25f4e65bf591",
       "version": 1,
@@ -109,27 +169,30 @@
     },
     {
       "community_id": "17b2b4b8-660e-4ab8-96c0-c51a0dc3163d",
-      "version": 1,
+      "version": 2,
       "data": {
         "scope": "global",
-        "text_template": "Ryan Reynolds here from Mint Mobile. I don't know if you knew this, but anyone can get the same premium wireless for $15 a month plan that I've been enjoying. It's not just for celebrities. So do like I did and have one of your assistant's assistants switch you to Mint Mobile today. I'm told it's super easy to do at mintmobile.com slash switch. Upfront payment of $45 for three-month plan equivalent to $15 per month required. Intro rate first three months only, then full price plan options available. Taxes and fees extra. See full terms at mintmobile.com.",
+        "text_template": "I don't know if you knew this, but anyone can get the same premium wireless for $15 a month plan that I've been enjoying. It's not just for celebrities. So do like I did and have one of your assistant's assistants switch you to Mint Mobile today. I'm told it's super easy to do at MintMobile.com slash switch. Upfront payment of $45 for three month plan equivalent to $15 per month required. Intro rate first three months only, then full price plan options available. Taxes and fees extra. Default terms at MintMobile.com.",
         "intro_variants": [
-          "Ryan Reynolds here from Mint Mobile. I don't know if you knew this, but anyone can get the same premium wireless for $15 a month plan that I've been enjoying. It's not just for celebrities. So do like I did and have one of your assistant's assistants switch you to"
+          "I don't know if you knew this, but anyone can get the same premium wireless for $15 a month plan that I've been enjoying.",
+          "Ryan Reynolds here from Mint Mobile, with a message for everyone paying big wireless way too much."
         ],
         "outro_variants": [
-          "for three-month plan equivalent to $15 per month required. Intro rate first three months only, then full price plan options available. Taxes and fees extra. See full terms at mintmobile.com."
+          "Intro rate first three months only, then full price plan options available. Taxes and fees extra. Default terms at MintMobile.com.",
+          "Intro rate first three months only, then full price plan options available. Taxes and fees extra. See for the next month. and Payful Terms at MintMobile.com."
         ],
         "avg_duration": null,
         "sponsor": "Mint Mobile",
         "sponsor_aliases": [
-          "MintMobile"
+          "MintMobile",
+          "mintmobile.com"
         ],
         "sponsor_tags": [
           "telecom",
           "universal"
         ],
         "community_id": "17b2b4b8-660e-4ab8-96c0-c51a0dc3163d",
-        "version": 1,
+        "version": 2,
         "submitted_at": "2026-05-15T13:44:56.269526+00:00",
         "submitted_app_version": "unknown",
         "sponsor_match": "exact"
@@ -322,6 +385,2859 @@
         "version": 1,
         "submitted_at": "2026-05-15T13:44:56.533543+00:00",
         "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "755f116a-8700-4306-984b-74fe81302aad",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Did you know if your windows are bare, indoor temperatures can go up 20 degrees? Turn the temperature down with Blinds.com and get up to 50% off custom window treatments like solar roller shades and more during the Memorial Day Mega Sale. Whether you want to DIY it or have a pro handle everything, we've got you. Free samples, real design experts, and zero pressure just help when you need it. Shop up to 50% off site-wide and huge savings on doorbusters right now during the Memorial Day Mega Sale. Mega Sale at Blinds.com. Rules and restrictions apply.",
+        "intro_variants": [
+          "Did you know if your windows are bare, indoor temperatures can go up 20 degrees?",
+          "Did you know if your windows are bare, indoor temperatures can go up 20 degrees? Turn the temperature down with Blinds.com and get up to 50% off custom window treatments like solar roller shades and more during the Memorial Day Mega Sale.",
+          "The right window treatments change everything. Your sleep, your privacy, the way every room looks and feels. At Blinds.com we've spent 30 years making it surprisingly simple to get exactly what your home needs. We've covered over 25 million windows and have 50,000 5-star reviews to prove we deliver."
+        ],
+        "outro_variants": [
+          "Shop up to 50% off site-wide and huge savings on doorbusters right now during the Memorial Day mega sale at blinds.com. Rules and restrictions apply.",
+          "Right now, get up to 45% off with minimum purchase, plus get a free professional measure at Blinds.com. Rules and restrictions apply."
+        ],
+        "avg_duration": null,
+        "sponsor": "Blinds.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "home_goods",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "755f116a-8700-4306-984b-74fe81302aad",
+        "version": 1,
+        "submitted_at": "2026-05-21T20:48:36Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "c88cda7b-bdd8-4e14-a977-1508e5cc0e4d",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hey mom, now that I have an afterschool job, I think I want to buy a drum kit. Okay, rockstar. Let's look at your account. When kids start making money, Chase has easy to use tools and expert bankers to help them learn how to manage it. And next month, I'll buy the bass drum and the cymbals. Oh, and maybe some noise canceling headphones for you. Aww, you've thought of everything. Help kids save, budget, and build financial independence all with Chase. That's good for kids and good for parents. Visit your local Chase branch and get started. Account subject to approval, JPMorgan Chase Bank, N.A. Member FDIC.",
+        "intro_variants": [
+          "Hey mom, now that I have an afterschool job, I think I want to buy a drum kit. Okay, rockstar. Let's look at your account."
+        ],
+        "outro_variants": [
+          "Visit your local Chase branch and get started. Account subject to approval, JPMorgan Chase Bank, N.A. Member FDIC."
+        ],
+        "avg_duration": null,
+        "sponsor": "JP Morgan Chase",
+        "sponsor_aliases": [
+          "JPMorgan Chase",
+          "Chase Bank"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "c88cda7b-bdd8-4e14-a977-1508e5cc0e4d",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:27:14Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "00ebc6f4-ecd4-4cd5-a92d-0dfe70c6e971",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "There's nowhere I wouldn't go to help someone customize and save on car insurance with Liberty Mutual, even if it means sitting front row at a comedy show. Hey everyone, check out this guy and his bird. What is this, your first date? Oh, no. We help people customize and save on car insurance with Liberty Mutual together. We're married. Me to a human, him to a bird. Yeah, the bird looks out of your league anyways. Get a quote at LibertyMutual.com or with your local agent.",
+        "intro_variants": [
+          "There's nowhere I wouldn't go to help someone customize and save on car insurance with Liberty Mutual, even if it means sitting front row at a comedy show."
+        ],
+        "outro_variants": [
+          "Get a quote at LibertyMutual.com or with your local agent.",
+          "and need at LibertyMutual.com. Liberty, Liberty, Liberty, Liberty."
+        ],
+        "avg_duration": null,
+        "sponsor": "Liberty Mutual",
+        "sponsor_aliases": [
+          "LibertyMutual"
+        ],
+        "sponsor_tags": [
+          "automotive",
+          "insurance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "00ebc6f4-ecd4-4cd5-a92d-0dfe70c6e971",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "01fb210a-776f-4284-88b6-b3dbcb12afab",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "OnDeck is built to back small businesses like yours. Whether you're buying equipment, expanding your team, or bridging cash flow gaps, OnDeck's loans up to $400,000 make it happen fast. Rated A-plus by the Better Business Bureau, and earning thousands of five-star Trustpilot reviews, OnDeck delivers funding you can count on. Apply in minutes at OnDeck.com. Depending on certain loan attributes, your business loan may be issued by OnDeck or Celtic Bank. OnDeck does not lend in North Dakota all loans and amounts subject to lender approval.",
+        "intro_variants": [
+          "OnDeck is built to back small businesses like yours. Whether you're buying equipment, expanding your team or bridging cash flow gaps, OnDeck's loans up to $400,000 help make it happen fast.",
+          "OnDeck is built to back small businesses like yours. Whether you're buying equipment, expanding your team, or bridging cash flow gaps, OnDeck's loans up to $400,000 make it happen fast.",
+          "OnDeck is built to back small businesses like yours. Whether you're buying equipment, expanding your team, or bridging cash flow gaps, OnDeck's loans up to $400,000 help make it happen fast."
+        ],
+        "outro_variants": [
+          "Depending on certain loan attributes, your business loan may be issued by OnDeck or Celtic Bank. OnDeck does not lend in North Dakota all loans and amounts subject to lender approval.",
+          "by OnDeck or Celtic Bank. OnDeck does not lend in North Dakota. All loans and amounts subject to lender approval."
+        ],
+        "avg_duration": null,
+        "sponsor": "OnDeck",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "01fb210a-776f-4284-88b6-b3dbcb12afab",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "07df78ed-9b7f-4600-a9b7-1aee45b5bfc7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Shopify is the commerce platform behind millions of businesses around the world and 10% of all e-commerce in the US. Join them and turn those what-ifs into...with Shopify today. Sign up for your $1 per month trial today at Shopify.com slash Vox Business. Go to Shopify.com slash Vox Business. That's Shopify.com slash Vox Business.",
+        "intro_variants": [
+          "Shopify is the commerce platform behind millions of businesses around the world and 10% of all e-commerce in the US. Join them and turn those what-ifs into...with Shopify today.",
+          "Support for the show comes from Shopify",
+          "Starting something new like a brand new business isn just difficult it can be really intimidating You pouring time and energy into something that might not work but on the other hand what if it does work out"
+        ],
+        "outro_variants": [
+          "You can turn those what-ifs into ba-bam with Shopify today.",
+          "You can sign up for your $1 per month trial today at shopify.com. You can go to shopify.com. That's shopify.com. slash Explained.",
+          "Go to Shopify.com slash Vox Business. That's Shopify.com slash Vox Business."
+        ],
+        "avg_duration": null,
+        "sponsor": "Shopify",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "music",
+          "streaming",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "07df78ed-9b7f-4600-a9b7-1aee45b5bfc7",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "13832c5f-e72c-45c3-9cdc-1251588933b7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for Today, Explained comes from Starbucks. Perhaps you're clocking out today with TGIF on your lips. You can keep the good vibes going with an energy boost with Starbucks' new energy refreshers. Their handcrafted energy refreshers can be the perfect thing to round out your Friday afternoon with flavors such as strawberry acai or even mango dragon fruit. Try the all new energy refreshers at Starbucks.",
+        "intro_variants": [
+          "Support for Today, Explained comes from Starbucks.",
+          "Support for Explained to Me comes from Starbucks.",
+          "Support for Explain It To Me comes from Starbucks.",
+          "Support for Today Explained comes from Starbucks.",
+          "Support for Today, Explained comes from Starbucks.",
+          "This is Advertiser Content from Starbucks.",
+          "Jonklin, I think of you as the queen of answering questions. Oh my gosh, thank you. What question do you have for me today? Okay, talk to me about energy levels."
+        ],
+        "outro_variants": [
+          "Try the all new energy refreshers at Starbucks.",
+          "Try the all-new Energy Refreshers at Starbucks.",
+          "Long story short, we all need moments throughout the day to refresh, and Starbucks has you covered with their new Energy Refreshers, your go-to lift to help you stay energized throughout the day."
+        ],
+        "avg_duration": null,
+        "sponsor": "Starbucks",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "beverage",
+          "food",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "13832c5f-e72c-45c3-9cdc-1251588933b7",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "30d6ba68-9293-4e7b-b536-adef664a5468",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show comes from Public, the investing platform that's available for us. We'll be right back. Generated assets are like ETFs with infinite possibilities, completely customizable and based on your thesis, not someone else's. Go to public.com slash podcast and earn an uncapped 1% bonus when you transfer your portfolio. That's public.com slash podcast. Paid for by Public Investing. Brokered services by Open to the Public Investing, Inc., Member FINRA and SIPC. Advisory services by Public Advisors, LLC, SEC Registered Advisor. Generated assets is an interactive analysis tool. Output is for informational purposes only and is not an investment recommendation or advice. Complete disclosures available at public.com slash disclosures.",
+        "intro_variants": [
+          "It screens thousands of stocks, builds a one-of-a-kind index, and lets you backtest it against the S&P 500. Then, you can invest in a few clicks.",
+          "It screens thousands of stocks, builds a one-of-a-kind index, and lets you backtest it against the S&P 500. Then you can invest in a few clicks.",
+          "Energy companies with high free cash flow to semiconductor suppliers growing revenue over 20 year over year You can literally type any prompt and put the AI to work It screens thousands of stocks builds a one of a kind index and lets you backtest it against the S 500 Then you can invest in a few clicks",
+          "Support for the show comes from Public, the investing platform that's available for us. We'll be right back.",
+          "Support for the show comes from Public, the investing platform for those who take it seriously. On Public, you can build a multi-asset portfolio of stocks, bonds, options, crypto, and now generated assets which allow you to turn any idea into an investable index with AI. It all starts with your prompt from renewable energy companies with high free cash flow to semiconductor suppliers growing revenue over 20% year over year. You can literally type any prompt and put the AI to work. It screens thousands of stocks, builds a one of a kind index and lets you back test it against the S&P 500. Then you can invest in a few clicks.",
+          "Support for the show comes from Public, the investing platform for those who take it seriously. On Public, you can build a multi-asset portfolio of stocks, bonds, options, crypto, and now generated assets, which allow you to turn any idea into an investable index with AI. It all starts with your prompt. From renewable energy companies with high free cash flow to semiconductor suppliers growing revenue over 20% year over year, you can literally type any prompt and put the AI to work. It screens thousands of stocks, builds a one-of-a-kind index, and builds a one-of-a-kind index. and lets you backtest it against the S&P 500. Then you can invest in a few clicks.",
+          "Support for the show comes from Public, the investing platform for those who take it seriously. On Public, you can build a multi-asset portfolio of stocks, bonds, options, crypto, and now generated assets, which allow you to turn any idea into an investable index with AI. It all starts with your prompt, from renewable energy companies with high free cash flow to semiconductor suppliers growing revenue over 20% year over year. You can literally type any prompt and put the AI to work. It screens thousands of stocks, builds a one-of-a-kind index, and lets you backtest it against the S&P. Then you can invest in a few clicks.",
+          "Support for the show comes from Public, the investing platform for those who take it seriously. On Public, you can build a multi-asset portfolio of stocks, bonds, options, crypto, and now generated assets, which allow you to turn any idea into an investable index with AI. It all starts with your prompt. From renewable energy companies with high free cash flow to semiconductor suppliers growing revenue over 20% year over year, you can literally type any prompt and put the AI to work. It screens thousands of stocks builds a one index and lets you backtest it against the S 500 Then you can invest in a few clicks"
+        ],
+        "outro_variants": [
+          "That's public.com slash podcast. Paid for by Public Investing. Brokered services by Open to the Public Investing, Inc., Member FINRA and SIPC. Advisory services by Public Advisors, LLC, SEC Registered Advisor. Generated Assets is an interactive analysis tool. Output is for informational purposes only and is not an investment recommendation or advice. Complete disclosures available at public.com slash disclosures.",
+          "That's public.com slash podcast. Paid for by Public Investing. Brokered services by Open to the Public Investing, Inc., Member FINRA and SIPC. Advisory services by Public Advisors, LLC, SEC Registered Advisor. Generated assets is an interactive analysis tool. Output is an interactive analysis tool.",
+          "That's public.com slash podcast. Paid for by Public Investing. Brokered services by Open to the Public Investing, Member FINRA and SIPC. Advisory services by Public Advisors, LLC, SEC Registered Advisor. Generated assets is an interactive analysis tool. Output is for informational purposes only and is not an investment recommendation or advice. Complete disclosures available at public.com slash discuss. Closures.",
+          "That public slash podcast Paid for by Public Investing Brokered services by Open to the Public Investing Inc Member FINRA and SIPC Advisory services by Public Advisors LLC SEC Registered Advisor Generated Assets is an interactive analysis tool Output is for informational purposes only and is not an investment recommendation or advice Complete disclosures available at public.com slash disclosures"
+        ],
+        "avg_duration": 113.94285714285716,
+        "sponsor": "Public.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "30d6ba68-9293-4e7b-b536-adef664a5468",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "32ae2eaa-3148-4b7e-9d96-e7fc59576ed1",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "How is TD making banking more human? Easy. With less bank talk and more real talk. Less, your call is important to us, and more, how can we help? Less confusion, and more clarity. It's things like tapping your phone to use your TD card, and getting your paycheck two business days early. It's getting more of what you want, and less of what you don't. That's how TD's making banking more human. Are we human?",
+        "intro_variants": [
+          "How is TD making banking more human? Easy.",
+          "How is TD making banking more human Easy"
+        ],
+        "outro_variants": [
+          "That's how TD is making banking more human. Are we human?",
+          "That's how TD's making banking more human. Are we human?",
+          "That's how TD's making banking more human."
+        ],
+        "avg_duration": null,
+        "sponsor": "TD card",
+        "sponsor_aliases": [
+          "TD Bank",
+          "Toronto-Dominion Bank"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "32ae2eaa-3148-4b7e-9d96-e7fc59576ed1",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "40e16c26-231d-4bb0-a5da-789e8917b198",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Virgin Voyages presents With Love from Bermuda. We didn't Uber to the airport. We didn't take our shoes off for security. We just sailed from New York. Now it's cocktails on deck, adults only everything, and waking up in warm pink sand paradise without flying there. No TSA, no chaos, just an epic winter escape. Award-winning kid-free cruises from Virgin Voyages. Now sailing from New York to Bermuda and beyond. Explore sailings at virginvoyages.com.",
+        "intro_variants": [
+          "Virgin Voyages presents With Love from Alaska. The scenery out here is unreal. Mountains, glaciers, waterfalls, the ship? Designed for panoramic views, which is why I'm pretending to be a wildlife photographer. I am not. Yesterday we were hiking and kayaking. Today, I'm watching for humpback whales. Anyway, wish you were here.",
+          "Virgin Voyages presents With Love from Bermuda. We didn't Uber to the airport. We didn't take our shoes off for security. We just sailed from New York. Now it's cocktails on deck, adults only everything, and waking up in warm pink sand paradise without flying there. No TSA, no chaos, just an epic winter escape.",
+          "Virgin Voyages presents With Love from Bermuda. We didn't Uber to the airport. We didn't take our shoes off for security. We just sailed from New York. Now it's cocktails on deck, adults only everything, and waking up in warm pink sand paradise without flying there. No TSA, no chaos, just an epic winter escape.",
+          "Virgin Voyages presents, with love from the Caribbean. Today was snorkeling. Tomorrow is poolside DJs. Tonight is dinner by chefs who take this very seriously. Also, no kids. At all. Which somehow makes everything better. Sorry you couldn't come. But also, you should fix that.",
+          "Virgin Voyages presents with love from the Caribbean. Today was snorkeling Tomorrow is poolside DJs Tonight is dinner by chefs who take this very seriously Also no kids at all which somehow makes everything better Sorry you couldn come But also you should fix that "
+        ],
+        "outro_variants": [
+          "A modern, award-winning, kid-free cruise from Virgin Voyages. Explore Caribbean sailings at virginvoyages.com.",
+          "A modern award kid cruise from Virgin Voyages Explore Caribbean sailings at virginvoyages",
+          "Award-winning, kid-free Alaskan cruises from Virgin Voyages with immersive shore excursions and zero kid energy. VirginVoyages.com",
+          "Award-winning kid-free cruises from Virgin Voyages. Now sailing from New York to Bermuda and beyond. Explore sailings at virginvoyages.com."
+        ],
+        "avg_duration": 113.94285714285716,
+        "sponsor": "Virgin Voyages",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "travel",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "40e16c26-231d-4bb0-a5da-789e8917b198",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "479f28c2-87b3-492c-8b84-869d0bd2cf2f",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Spring is all about fresh starts and getting a car should be no different. Meet FlexCar, a new way to get a car without the large down payments or dealership hassles. One simple monthly payment includes your car insurance, maintenance and more. Use code SPRING for $50 off your first month at FlexCar.com.",
+        "intro_variants": [
+          "Spring is all about fresh starts and getting a car should be no different."
+        ],
+        "outro_variants": [
+          "Use code SPRING for $50 off your first month at FlexCar.com."
+        ],
+        "avg_duration": 113.94285714285716,
+        "sponsor": "Flexcar",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "auto",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "479f28c2-87b3-492c-8b84-869d0bd2cf2f",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "4c132f88-bb8b-47b6-8d74-b1c38c7c90f0",
+      "version": 2,
+      "data": {
+        "scope": "global",
+        "text_template": "Guys don't like talking about ED, but if something's been off in the bedroom, you're not alone, and you don't need to wait longer than you need to take action. Getting real treatment is simple, and through HIMSS, it's 100% online. At some point, you've gotta stop blaming stress, sleep, or just getting older. If bedroom performance is in question, it's probably crossed your mind to do something about it. The good news? You don't have to jump through hoops to fix it. HIMSS connects you with licensed healthcare providers online, giving you simple access to legitimate ED treatment options from home. No awkward appointments, no pharmacy lines. You just complete a simple online intake form and a provider will review your information and determine if treatment is right for you. If prescribed, your treatment ships directly to your door in discreet packaging. To get simple, online access to personalized, affordable care for ED, weight loss, and more, visit HEMS.com slash BTB. That's HEMS.com slash BTB for your free online visit. HEMS.com slash BTB. Prescription required. See website for details and important safety information. Sledenafil is the generic version of Viagra. Viagra is a registered trademark of Viatris, a Viatris Specialty LLC. HEMS is not affiliated with or endorsed by Viatris.",
+        "intro_variants": [
+          "Guys don't like talking about ED, but if something's been off in the bedroom, you're not alone, and you don't need to wait longer than you need to take action.",
+          "Support for the show today comes from HIMSS.",
+          "Support for the show today comes from Hims."
+        ],
+        "outro_variants": [
+          "Sledenafil is the generic version of Viagra. Viagra is a registered trademark of Viatris, a Viatris Specialty LLC. HEMS is not affiliated with or endorsed by Viatris.",
+          "To get simple, online access to personalized, affordable care for ED, weight loss, and more, visit HEMS.com",
+          "Hymns is not affiliated with or endorsed by Viatris."
+        ],
+        "avg_duration": null,
+        "sponsor": "Hims",
+        "sponsor_aliases": [
+          "Hems",
+          "hims.com"
+        ],
+        "sponsor_tags": [
+          "health",
+          "personal_care",
+          "dtc",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "4c132f88-bb8b-47b6-8d74-b1c38c7c90f0",
+        "version": 2,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "54864633-2b13-4a78-9a5d-34a1619bd88b",
+      "version": 2,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for today, Explained comes from BetterHelp. May is Mental Health Awareness Month. That's what May stands for. A reminder that whatever you're going through, you don't have to go through it alone. There's a therapist out there who's equipped to help you through it. You can give therapy a try. BetterHelp makes it simple to connect with a licensed therapist online by doing the initial matching work for you so you can focus on your therapy goals. You don't have to be on this journey alone. Find support and have someone with you in therapy. Listeners can get 10% off their first month at BetterHelp.com. slash explained. That's better, H-E-L-P dot com slash explained.",
+        "intro_variants": [
+          "Support for today, Explained comes from BetterHelp.",
+          "This show is sponsored by BetterHelp",
+          "This is a BetterHelp ad",
+          "May is Mental Health Awareness Month A reminder that whatever you going through you don have to do it alone",
+          "May is Mental Health Awareness Month and it a good reminder that whatever you going through you don have to go through it alone",
+          "May is Mental Health Awareness Month. That's what May stands for. A reminder that whatever you're going through, you don't have to go through it alone."
+        ],
+        "outro_variants": [
+          "You don't have to be on this journey alone. Find support and have someone with you in therapy.",
+          "Listeners can get 10% off their first month at BetterHelp.com. slash explained. That's better, H-E-L-P dot com slash explained.",
+          "You can sign up and get 10% off at BetterHelp.com slash America Actually. That's BetterHelp.com slash America Actually.",
+          "sign up and get 10% off at betterhelp.com slash behind that's better help.com slash behind.",
+          "Sign up now and get 10% off at BetterHelp.com. That's BetterHelp.com."
+        ],
+        "avg_duration": null,
+        "sponsor": "BetterHelp",
+        "sponsor_aliases": [
+          "Better Help"
+        ],
+        "sponsor_tags": [
+          "health",
+          "mental_health",
+          "personal_care",
+          "self_improvement",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "54864633-2b13-4a78-9a5d-34a1619bd88b",
+        "version": 2,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "551c624a-3d56-480b-8bfd-5e87b14e5a28",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show today comes from Bombas If your sock drawer could use a little love you can upgrade to Bombas They have a range of well socks designed for every activity every activity Like their cushioned sweat sports socks They say you don need to worry about sliding down your foot while you stay active this spring They have more than socks too with breathable soft high basics underwear and t Our colleague Nisha Chital has tried Bombas One thing that's great is Bombas, they have warmer socks that are really thick and warm and great in the winter, and they're like the only sock I want to wear in the winter. And they also have lighter weight ones, like the no-show socks that are great for like sneakers, flats, loafers, warmer weather footwear. You can go to Bombas.com slash explain and use the code EXPLAINED for 20% off your first purchase. That's B-O-M-B-A-S dot com slash explained. The code at checkout is EXPLAINED.",
+        "intro_variants": [
+          "Support for the show today comes from Bombas",
+          "If your sock drawer could use a little love you can upgrade to Bombas"
+        ],
+        "outro_variants": [
+          "You can go to Bombas.com slash explain and use the code EXPLAINED for 20% off your first purchase. That's B-O-M-B-A-S dot com slash explained. The code at checkout is EXPLAINED."
+        ],
+        "avg_duration": null,
+        "sponsor": "Bombas",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "apparel",
+          "dtc",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "551c624a-3d56-480b-8bfd-5e87b14e5a28",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "56c150bb-c761-4025-bacb-85a1f5e39e64",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Want to be a star? No problem! Anyone can shine on TikTok! Post your first video today! Real life, real story, real you. Download TikTok and get started!",
+        "intro_variants": [
+          "Want to be a star? No problem! Anyone can shine on TikTok!"
+        ],
+        "outro_variants": [
+          "Download TikTok and get started!"
+        ],
+        "avg_duration": null,
+        "sponsor": "TikTok",
+        "sponsor_aliases": [
+          "Tik Tok"
+        ],
+        "sponsor_tags": [
+          "comedy",
+          "music",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "56c150bb-c761-4025-bacb-85a1f5e39e64",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "61b7f12f-3bb3-4e80-b6c2-a87103c00743",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "The wait is over. Live table games have arrived in New York City. Experience Blackjack, Baccarat, Crabs and Roulette 24-7 only at Resorts World New York City. Gambling problem? Call 877-8HOPE-NY or text HOPE-NY-467-369.",
+        "intro_variants": [
+          "The wait is over. Live table games have arrived in New York City. Experience Blackjack, Baccarat, Crabs and Roulette 24-7 only at Resorts World New York City.",
+          "The wait is over. Live table games have arrived in New York City. Experience blackjack, baccara, crabs and roulette 24-7 only at Resorts World New York City."
+        ],
+        "outro_variants": [
+          "Gambling problem? Call 877-8HOPE-NY or text HOPE-NY-467-369.",
+          "Gambling problem call 877-8HOPE-NY or text HOPE-NY-467-369. Must be 21 or older to gamble. Standard message is applied."
+        ],
+        "avg_duration": null,
+        "sponsor": "Resorts World",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "gambling",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "61b7f12f-3bb3-4e80-b6c2-a87103c00743",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "643ea52b-5e67-43d0-9fee-f0adf1d408e7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Quick reminder, everybody, tax season is here. Before anyone panics, here's another reminder. Intuit TurboTax is also here. With TurboTax Expert full service, you can match with a real tax expert who handles your taxes from start to finish. Like, it basically turns tax season into a non-event, which is saying something. You can chill, listen to your favorite podcast, maybe ours, and get real-time updates on your phone while your TurboTax expert checks every deduction and credit to help get you the best possible outcome. It's that simple. Visit TurboTax.com to get started. Real-time updates are available in the iOS mobile app.",
+        "intro_variants": [
+          "Handing off your taxes? Get the best outcome with a local expert",
+          "Quick reminder, everybody, tax season is here. Before anyone panics, here's another reminder"
+        ],
+        "outro_variants": [
+          "Find your local tax expert at TurboTax.com.",
+          "Find your local tax expert at turbotax.com slash local.",
+          "Visit TurboTax.com to get started."
+        ],
+        "avg_duration": null,
+        "sponsor": "Intuit",
+        "sponsor_aliases": [
+          "TurboTax",
+          "Turbo Tax"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "643ea52b-5e67-43d0-9fee-f0adf1d408e7",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "645e026a-7fb2-4645-8a9e-42570d74d193",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show comes from Amazon. There are the things you can plan for. A first birthday party, a movie marathon, a renter-friendly bathroom reno. And then there are the things you can never plan for. A surprise rainstorm, a Blu-ray player calling it quits, stick-on tiles that looked way better on the package. For all things planned and unplanned, Amazon has you covered. You'll find low prices on everyday essentials and last-minute lifesavers. Shop Amazon and save on essentials. Save the everyday.",
+        "intro_variants": [
+          "Support for the show comes from Amazon.",
+          "There are the things you can plan for. A first birthday party, a movie marathon, a renter-friendly bathroom reno."
+        ],
+        "outro_variants": [
+          "Shop Amazon and save on essentials. Save the everyday."
+        ],
+        "avg_duration": null,
+        "sponsor": "Amazon",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "645e026a-7fb2-4645-8a9e-42570d74d193",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "7928fd80-cb24-491b-a5e5-f908f0aa2f34",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This is Jana Kramer from Wind Down with Jana Kramer. So why do they call it a dishwasher? Well, don't worry. It's not a trick question or anything. It's just because it washes dishes. If the filter and the dishwasher itself are dirty, those dishes aren't actually getting clean. That's why you need Cascade Platinum Plus. Powered by two times the cleaning power of Dawn, Cascade Platinum Plus doesn't just remove 100% of grease and residue from dishes. It cleans your dishwasher and filter too. So you get clean dishes and a dishwasher that keeps washing. Just scrape, load and done. Find Cascade Platinum Plus at your local retailer.",
+        "intro_variants": [
+          "This is Jana Kramer from Wind Down with Jana Kramer. So why do they call it a dishwasher? Well, don't worry."
+        ],
+        "outro_variants": [
+          "So you get clean dishes and a dishwasher that keeps washing. Just scrape, load, and done.",
+          "Find Cascade Platinum Plus at your local retailer."
+        ],
+        "avg_duration": null,
+        "sponsor": "Cascade Platinum",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "home_goods",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "7928fd80-cb24-491b-a5e5-f908f0aa2f34",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "7e4d1625-23ac-4bf2-b30d-233539fceab9",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Security program on spreadsheets, new regulations piling up, and audit dread? It's time for Vanta. Vanta automates security and compliance, brings evidence into one place, and cuts audit prep by 82%. Less manual work, clearer visibility, faster deals, zero chaos. Call it compliance, or call it compliance. Get it? Join the 15,000 companies using Vanta to prove trust. Go to V-A-N-T-A dot com slash com",
+        "intro_variants": [
+          "Security program on spreadsheets, new regulations piling up, and audit dread? It's time for Vanta. Vanta automates security and compliance, brings evidence into one place, and cuts audit prep by 82%. Less manual work, clearer visibility, faster deals, zero chaos. Call it compliance, or call it compliance. Get it?"
+        ],
+        "outro_variants": [
+          "Join the 15,000 companies using Vanta to prove trust. Go to V-A-N-T-A dot com slash com"
+        ],
+        "avg_duration": null,
+        "sponsor": "Vanta",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "security",
+          "technology",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "7e4d1625-23ac-4bf2-b30d-233539fceab9",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "919a1600-268d-4f93-9ae1-73db5f3dab1f",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Gold Days at Grubhub Plus is officially here. We're talking Grubhub's best offers of the year all month long. It's the best time to order, but the worst time to have friends over, because when the deals are this good, everyone's going to want to bite. Not a member? Join now for just 99 cents a month for your first six months. You'll enjoy $0 delivery fees and lower service fees on eligible orders. Sign up now at grubhub.com slash plus slash gold. Terms apply.",
+        "intro_variants": [
+          "Gold Days at Grubhub Plus is officially here. We're talking Grubhub's best offers of the year all month long.",
+          "Listen up! Gold Days at Grubhub Plus is officially here. We're talking Grubhub's best offers of the year, all month long.",
+          "Listen up Gold Days at Grubhub Plus is officially here We talking Grubhub best offers of the year all month long",
+          "Gold Days at Grubhub Plus is officially here. We're talking Grubhub's best offers of the year, all month long."
+        ],
+        "outro_variants": [
+          "Sign up now at grubhub.com slash plus slash gold. Terms apply."
+        ],
+        "avg_duration": null,
+        "sponsor": "Grubhub",
+        "sponsor_aliases": [
+          "Grub Hub"
+        ],
+        "sponsor_tags": [
+          "food",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "919a1600-268d-4f93-9ae1-73db5f3dab1f",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "933db58b-f50f-4529-9369-86336e0a0456",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This episode is brought to you by Nordstrom. Spring calls for a wardrobe refresh, and Nordstrom has the best styles of the season. From dresses and denim to standout tops and accessories, find the trends and essentials that feel right for you. Discover new arrivals from brands you love, like WAIFE, Princess Polly, Mango, Adidas, and Free People. Plus, free shipping and returns and free styling appointments make everything so easy. Shop in stores at Nordstrom.com or download the Nordstrom app.",
+        "intro_variants": [
+          "This episode is brought to you by Nordstrom."
+        ],
+        "outro_variants": [
+          "Shop in stores at Nordstrom.com or download the Nordstrom app."
+        ],
+        "avg_duration": null,
+        "sponsor": "Nordstrom",
+        "sponsor_aliases": [
+          "Nordstrom.com"
+        ],
+        "sponsor_tags": [
+          "apparel",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "933db58b-f50f-4529-9369-86336e0a0456",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "954c457b-1464-478e-86aa-f73bf6585367",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Mornings can feel like a lot, but there's one small choice that can make mornings feel good. Silk Protein. It's a smooth, plant-based beverage with 13 grams of complete plant protein and 50% less sugar than dairy milk. Pour it into your cereal, blend it into a smoothie, stir it into your coffee. Silk Protein makes mornings feel a little calmer, a little brighter, a little more okay. I got this. Silk Protein. Feel planty good.",
+        "intro_variants": [
+          "Mornings can feel like a lot, but there's one small choice that can make mornings feel good. Silk Protein."
+        ],
+        "outro_variants": [
+          "Silk Protein. Feel planty good.",
+          "Silk Protein. Feel plenty good."
+        ],
+        "avg_duration": null,
+        "sponsor": "Silk Protein",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "food",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "954c457b-1464-478e-86aa-f73bf6585367",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "95a21087-54df-43ae-8ecd-8e7fd280afc8",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "The all new Whoop is here. Now more advanced than ever. Train smarter. Sleep deeper. Recover faster. Extend your healthy years. Understand your cycle phases. Now 7% smaller with 14 plus days of battery life. So your data never stops, and neither do you. Power your best performance with memberships made for every goal. Join Whoop today.",
+        "intro_variants": [
+          "The all new Whoop is here. Now more advanced than ever.",
+          "Now, 7% smaller with 14 plus days of battery life. So your data never stops, and neither do you."
+        ],
+        "outro_variants": [
+          "Join Whoop today."
+        ],
+        "avg_duration": null,
+        "sponsor": "Whoop",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health",
+          "sports",
+          "dtc",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "95a21087-54df-43ae-8ecd-8e7fd280afc8",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "96b18e49-1a8e-4ae6-aeeb-8a4cba2d216e",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hey, sorry to interrupt your playlist but this is better than music. It's free stuff. Download TikTok. Search slash free and share the link to get items for free. Start slashing now.",
+        "intro_variants": [],
+        "outro_variants": [
+          "Download TikTok. Search slash free and share the link to get items for free. Start slashing now."
+        ],
+        "avg_duration": null,
+        "sponsor": "TikTok",
+        "sponsor_aliases": [
+          "Tik Tok"
+        ],
+        "sponsor_tags": [
+          "comedy",
+          "music",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "96b18e49-1a8e-4ae6-aeeb-8a4cba2d216e",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "ad0a0b70-450d-4b8e-b164-609b87dcf6d9",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Running a business means checking a lot of boxes. Let's see. Payroll? Check. Inventory? Check. Insurance? Ah! Good thing Simply Business makes getting small business insurance fast and easy. Check insurance off your list at simplybusiness.com.",
+        "intro_variants": [
+          "Running a business means checking a lot of boxes."
+        ],
+        "outro_variants": [
+          "Check insurance off your list at simplybusiness.com."
+        ],
+        "avg_duration": null,
+        "sponsor": "simplybusiness.com",
+        "sponsor_aliases": [
+          "Simply Business"
+        ],
+        "sponsor_tags": [
+          "business",
+          "insurance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "ad0a0b70-450d-4b8e-b164-609b87dcf6d9",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "c7df5360-546b-4114-9d51-ae2e63bf063d",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "With no fees or minimums on checking accounts, it's no wonder the Capital One bank guy is so passionate about banking with Capital One. If he were here, he wouldn't just tell you about no fees or minimums. He'd also talk about how most Capital One cafes are open seven days a week to assist with your banking needs. Yep, even on weekends. It's pretty much all he talks about, in a good way. What's in your wallet? Terms apply. See CapitalOne.com slash bank. Capital One N-A member FDIC.",
+        "intro_variants": [
+          "With no fees or minimums on checking accounts, it's no wonder the Capital One bank guy is so passionate about banking with Capital One. If he were here, he wouldn't just tell you about no fees or minimums. He'd also talk about how most Capital One cafes are open seven days a week to assist with your banking needs. Yep, even on weekends. It's pretty much all he talks about, in a good way."
+        ],
+        "outro_variants": [
+          "What's in your wallet? Terms apply. See CapitalOne.com slash bank. Capital One N-A member FDIC."
+        ],
+        "avg_duration": 113.94285714285716,
+        "sponsor": "Capital One",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "c7df5360-546b-4114-9d51-ae2e63bf063d",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "ca6c0db7-f959-4dcb-9412-e736bf3a16e5",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Here's the thing about bad cholesterol. It can silently build up in your arteries over time. High bad cholesterol may increase your risk of heart attack or stroke. Is your bad cholesterol low enough? Talk to your doctor about setting a goal to help lower your bad cholesterol and reduce your risk of heart attack or stroke. There's more to know about bad cholesterol. Learn more about the risks at badcholesterol.com. Brought to you by Merck.",
+        "intro_variants": [
+          "Here's the thing about bad cholesterol. It can silently build up in your arteries over time. High bad cholesterol may increase your risk of heart attack or stroke."
+        ],
+        "outro_variants": [
+          "Learn more about the risks at badcholesterol.com. Brought to you by Merck.",
+          "There's more to know about bad cholesterol."
+        ],
+        "avg_duration": null,
+        "sponsor": "badcholesterol.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health",
+          "supplements",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "ca6c0db7-f959-4dcb-9412-e736bf3a16e5",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "d896bf4f-72f8-4540-8e2f-337923625888",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "We all do it. You have a night for yourself but don't like the sound of the silence, so you turn on the TV just for the ambience. It's a little trick that helps you feel like you've got company and aren't alone. And other insurers, well, they may make you feel alone. But when you switch to GEICO, you've got claims reps available around the clock. So whenever you need, you'll have people around to help. And let's turn on the washing machine, just for good measure. Isn't that soothing? It feels good to have support. It feels good to Geico.",
+        "intro_variants": [
+          "We all do it. You have a night for yourself but don't like the sound of the silence, so you turn on the TV just for the ambience."
+        ],
+        "outro_variants": [
+          "It feels good to have support. It feels good to Geico."
+        ],
+        "avg_duration": null,
+        "sponsor": "Geico",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "insurance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "d896bf4f-72f8-4540-8e2f-337923625888",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "db8638e8-45b8-4581-81c0-b8837aedfd07",
+      "version": 2,
+      "data": {
+        "scope": "global",
+        "text_template": "Spring styles are at Nordstrom Rack stores now, and they're up to 60% off. Stock up and save on Rag & Bone, Madewell, Vince, All Saints, and more of your favorites. How did I not know Rack has Adidas? Why do we rack? For the hottest deals. Just so many good brands. Join the Nordiclub to unlock exclusive discounts, shop new arrivals first, and more. Plus, buy online and pick up at your favorite Rack store for free. Great brands, great prices. That's why you rack.",
+        "intro_variants": [
+          "Spring styles are at Nordstrom Rack stores now, and they're up to 60% off.",
+          "Everything you want for summer is at Nordstrom Rack stores now and up to 60% off.",
+          "Stock up and save on Rag & Bone, Madewell, Vince, All Saints, and more of your favorites.",
+          "Stock up and save on the brands you love like Vince, Sam Edelman, Frame and Free People"
+        ],
+        "outro_variants": [
+          "Great brands, great prices. That's why you rack."
+        ],
+        "avg_duration": null,
+        "sponsor": "Nordstrom",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "home_goods",
+          "kids_family",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "db8638e8-45b8-4581-81c0-b8837aedfd07",
+        "version": 2,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "dcb5d11b-7b5b-4024-bc58-3c522400ba5f",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This message comes from Betterment. Betterment's Dan Egan talks about tax loss harvesting. Tax loss harvesting is a tax management strategy. When you have a position that's gone down over time, we intentionally sell out of it to realize a loss, which we then say to the IRS, hey, we lost money. You get to use that to offset your ordinary income every year, decreasing your tax burden. Investing involves risk. Performance not guaranteed. Betterment does not offer tax advice. TLH may not be suitable for all customers. Learn more at betterment.com slash TLH-terms.",
+        "intro_variants": [
+          "This message comes from Betterment.",
+          "Betterment's Dan Egan talks about tax loss harvesting. Tax loss harvesting is a tax management strategy."
+        ],
+        "outro_variants": [
+          "Learn more at betterment.com slash TLH-terms."
+        ],
+        "avg_duration": null,
+        "sponsor": "Betterment",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "dcb5d11b-7b5b-4024-bc58-3c522400ba5f",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "f081026b-f9a5-459e-85dc-1c13430cc915",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Spectrum Business keep businesses of all sizes connected seamlessly with fast, reliable internet, advanced Wi-Fi, phone, TV, and mobile services. That's right. And Spectrum Business offers 100% U.S.-based customer support 24-7 to help you stay up and running. And they offer tailored connectivity solutions with packages built for your business budget. Yeah, so it's no wonder millions of business owners rely on Spectrum Business to keep them connected. Visit Spectrum.com slash business to learn more. Restrictions apply. Service is not available in all areas.",
+        "intro_variants": [
+          "Spectrum Business keep businesses of all sizes connected seamlessly with fast, reliable internet, advanced Wi-Fi, phone, TV, and mobile services. That's right. And Spectrum Business offers 100% U.S.-based customer support 24-7 to help you stay up and running. And they offer tailored connectivity solutions with packages built for your business budget."
+        ],
+        "outro_variants": [
+          "Yeah, so it's no wonder millions of business owners rely on Spectrum Business to keep them connected. Visit Spectrum.com slash business to learn more. Restrictions apply. Service is not available in all areas."
+        ],
+        "avg_duration": 113.94285714285716,
+        "sponsor": "Spectrum Business",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "telecom",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "f081026b-f9a5-459e-85dc-1c13430cc915",
+        "version": 1,
+        "submitted_at": "2026-05-27T02:31:11.364726+00:00",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "8770fcd0-2f78-4b67-8978-1b2af536efdb",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show comes from Chime. Banking can sometimes feel like you're playing a game of dodgeball. Love dodgeball. Doing everything in your power to not get hit with overdraft fees minimum balance requirements and monthly fees Don love that Chime wants to help They say that they approaching things differently and changing the way people bank Chime says they are offering you the most rewarding fee banking banking built for you Why pay to get your own money They're not looking to charge you overdraft and or monthly fees, and they have thousands of fee-free ATMs for you to use built for you, not the 1%. Take that 1%. Chime members can even benefit from up to $1,150 in annual rewards fee free plus direct deposit unlocks the most rewarding way to bank at Chime. Chime says they're not just smarter banking, they're the most rewarding way to bank. You can join the millions who are already banking fee free today. It just takes a few minutes to sign up. Head to Chime.com slash explained. That's Chime.com slash explained. Chime is a fintech, not a bank. Banking services for MyPay and ChimeCard provided by Chime's bank partners. Optional products and services may have fees or charges. Stated annual percentage yield and cashback for Chime Prime only. No minimum balance required. Checking account ranking based on a J.D. Power survey published October 20, 2025. For more information on APY rates, MyPay, SpotMe, and Travel Perks, go to chime.com slash disclosures.",
+        "intro_variants": [
+          "Support for the show comes from Chime."
+        ],
+        "outro_variants": [
+          "For more information on APY rates, MyPay, SpotMe, and Travel Perks, go to chime.com slash disclosures."
+        ],
+        "avg_duration": null,
+        "sponsor": "Chime",
+        "sponsor_aliases": [
+          "ChimeCard",
+          "chime.com"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "8770fcd0-2f78-4b67-8978-1b2af536efdb",
+        "version": 1,
+        "submitted_at": "2026-05-28T18:14:52Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "c9414951-d4c6-4d02-8169-138f89a2da64",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Ready to soundtrack your summer? With Red Bull Summer All Day Play, you choose a playlist that fits your summer vibe the best. Are you a festival fanatic, a deep-end DJ, a road dog, or a trail mixer? Just add a song to your chosen playlist and put your summer on track. Red Bull Summer All-Day Play. Red Bull gives you wings. Visit redbull.com slash brightsummer ahead to learn more. See you this summer.",
+        "intro_variants": [
+          "Ready to soundtrack your summer? With Red Bull Summer All Day Play"
+        ],
+        "outro_variants": [
+          "Visit redbull.com slash brightsummer ahead to learn more. See you this summer.",
+          "Visit redbull.com slash bright summer ahead to learn more. See you this summer."
+        ],
+        "avg_duration": null,
+        "sponsor": "Red Bull",
+        "sponsor_aliases": [
+          "RedBull",
+          "redbull.com"
+        ],
+        "sponsor_tags": [
+          "food",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "c9414951-d4c6-4d02-8169-138f89a2da64",
+        "version": 1,
+        "submitted_at": "2026-05-30T15:23:15Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "96e378cb-8642-4386-a906-e7cacc94c793",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "What's up, y'all? I'm Skylar Diggins, seven-time WNBA All-Star, Olympic gold medalist, and mom. And I'm Cassidy Hubbard, host and reporter for nearly 20 years, covering the biggest names and stories in sports. And mom. And this is And Mom, a community for athletes, game changers, and moms of all kinds. Pans. Dropping May 14th. Tap in with us.",
+        "intro_variants": [
+          "What's up, y'all? I'm Skylar Diggins, seven-time WNBA All-Star, Olympic gold medalist, and mom."
+        ],
+        "outro_variants": [
+          "And this is And Mom, a community for athletes, game changers, and moms of all kinds. Pans. Dropping May 14th. Tap in with us."
+        ],
+        "avg_duration": null,
+        "sponsor": "And Mom",
+        "sponsor_aliases": [
+          "AndMom"
+        ],
+        "sponsor_tags": [
+          "kids_family",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "96e378cb-8642-4386-a906-e7cacc94c793",
+        "version": 1,
+        "submitted_at": "2026-05-30T15:39:06Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "9d8a3bf8-ef58-403d-b2e5-2295133a9d27",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for Today Explained comes from ShipStation When your company is growing fast order fulfillment can make or break your success That where ShipStation comes in says ShipStation ShipStation says their intelligence platform helps take the pressure off by bringing order management rate shopping warehouse systems and powerful analytics into one place With ShipStation everything you need to manage getting orders to customers is in one place You can connect to over 200 sales channels and instead of five to seven disconnected tools you got one ShipStation says they can share tracking details to reduce customer service inquiries by up to 12%. While their returns management gives you insight into what's coming back and why, their analytics show where you're saving, where you can optimize. They also say they can select the best carrier, find competitive rates, print labels in bulk, so much more. You can try ShipStation free for 60 days with full access to all features. No credit card needed. Go to ShipStation.com and use code TODAY for 60 days free. 60 days gives you plenty of time to see exactly how much you can save. and how much time and money you're saving on every shipment. That's ShipStation.com code today. ShipStation.com code today.",
+        "intro_variants": [
+          "Support for Today Explained comes from ShipStation",
+          "Support for JXplained comes from ShipStation"
+        ],
+        "outro_variants": [
+          "That's ShipStation.com code today. ShipStation.com code today."
+        ],
+        "avg_duration": null,
+        "sponsor": "ShipStation",
+        "sponsor_aliases": [
+          "Ship Station",
+          "ShipStation.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "9d8a3bf8-ef58-403d-b2e5-2295133a9d27",
+        "version": 1,
+        "submitted_at": "2026-05-30T15:40:08Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "d8200407-45b6-4377-b63d-f62de1a57439",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show today comes from Framer, not Farmer for those of you with bad eyesight. These days, if you're a business owner, you need to have a website that can actually help your business grow. And with Framer, you can do it quickly and easily. Framer is a website builder that works like your team's favorite design tool with real-time collaboration or robust CMS. With everything you need for great SEO and advanced analytics that include integrated A-B testing, your designers and marketers are empowered to build and maximize your dot-com from day one. Changes to your Framer site go live to the web in seconds with one click without help from engineering, which can help your team reduce dependencies and reach escape velocity. Cisney, that sounds cool. You can learn how you can get more out of your .com from a Framer specialist or get started building for free today at Framer.com slash explain for 30% off of Framer Pro annual plan. That's Framer.com slash explain for 30% off Framer.com slash explain. Rules and restrictions may apply.",
+        "intro_variants": [
+          "Support for the show today comes from Framer"
+        ],
+        "outro_variants": [
+          "That's Framer.com slash explain for 30% off Framer.com slash explain. Rules and restrictions may apply."
+        ],
+        "avg_duration": null,
+        "sponsor": "Framer",
+        "sponsor_aliases": [
+          "framer.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "d8200407-45b6-4377-b63d-f62de1a57439",
+        "version": 1,
+        "submitted_at": "2026-05-30T15:44:25Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "5940422b-5f00-45da-beee-339bc425a9ed",
+      "version": 2,
+      "data": {
+        "scope": "global",
+        "text_template": "Hi, I'm Maria Sharapova, host of the Pretty Tough Podcast. Each episode, I sit down with high-achieving women to discuss the pursuit of excellence without apology. This week on the show, clinical psychologist and founder Dr. Becky Kennedy and I unpack what it really means to raise kids today. I think parenting is the most important job in the world and the one that has the most impact on your world and the world It is nonstop Check out Pretty Tough new episodes on Wednesdays You can watch or listen in your favorite podcast app",
+        "intro_variants": [
+          "Hi, I'm Maria Sharapova, host of the Pretty Tough Podcast.",
+          "Each episode, I sit down with high-achieving women to discuss the pursuit of excellence without apology."
+        ],
+        "outro_variants": [
+          "Check out Pretty Tough new episodes on Wednesdays You can watch or listen in your favorite podcast app",
+          "Check out Pretty Tough Podcast, new episodes on Wednesdays. You can watch it or listen in your favorite podcast app."
+        ],
+        "avg_duration": null,
+        "sponsor": "Pretty Tough Podcast",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "streaming",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "5940422b-5f00-45da-beee-339bc425a9ed",
+        "version": 2,
+        "submitted_at": "2026-05-30T15:45:26Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "dfbb639a-908d-47c6-b330-9b9e7ed51733",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Ray Ban Meta glasses take the friction out of travel. Hey Meta, where's the closest metro station? Closest metro to you is Union Square, about 3 blocks away. Hey Meta, text mom I'm getting on the train now. Sending message. Check all your itinerary, take calls, and listen to music with open ear audio. No digging for your phone. No stopping for a map. Just you and your glasses. Ray Ban Meta. Iconic style meets Meta AI. Available at Walmart and other authorized retailers.",
+        "intro_variants": [
+          "Ray Ban Meta glasses take the friction out of travel.",
+          "Ray-Ban Meta glasses take the friction out of travel."
+        ],
+        "outro_variants": [
+          "Ray Ban Meta. Iconic style meets Meta AI. Available at Walmart and other authorized retailers.",
+          "Ray-Ban Meta, iconic style meets Meta AI. Available at Walmart and other authorized retailers."
+        ],
+        "avg_duration": null,
+        "sponsor": "Ray Ban Meta",
+        "sponsor_aliases": [
+          "Ray-Ban Meta",
+          "RayBan Meta"
+        ],
+        "sponsor_tags": [
+          "personal_care",
+          "technology",
+          "travel",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "dfbb639a-908d-47c6-b330-9b9e7ed51733",
+        "version": 1,
+        "submitted_at": "2026-05-30T15:53:44Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "10ed0ed2-5574-4840-b122-944c673ea9b7",
+      "version": 2,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for this show comes from Quince. You make difficult choices each and every day. So why does your outfit need to be one of them? Instead, you can try effortless, comfortable, sleek, and well-put-together clothes with the help of Quince. Quince has all the wardrobe staples for spring. Think 100% European linen shorts and shirts from $34, lightweight, breathable, and comfortable, but still look put together. And clean 100% Pima cotton tees with a softness that has to be felt. Everything is priced 50 to 80% less than what you'd find at similar brands. Our colleague Andrew Melnizik has gotten some Quince. So Quince recently sent me their organic comfort stretch chore jacket. I got it in the tobacco color. It's not too heavy. It's not too light. I've now worn it to a few basketball games, a couple concerts, a few dinners, and even just meeting up with some friends. You can refresh your spring wardrobe with Quince Go to Quince slash explainit for free shipping on your order and 365 day returns Now available in Canada too That Q dot com slash explain it to get free shipping and 365 day returns Quince slash explain it",
+        "intro_variants": [
+          "Support for this show comes from Quince."
+        ],
+        "outro_variants": [
+          "That Q dot com slash explain it to get free shipping and 365 day returns Quince slash explain it.",
+          "That's Quince dot com slash explain it to get free shipping and 365 day returns Quince slash explain it",
+          "That's Q-U-I-N-C-E dot com slash explainit to get free shipping and 365 day returns. Quince.com slash explainit.",
+          "That's quince.com slash astead, A-S-T-E-A-D, for free shipping and 365 day returns."
+        ],
+        "avg_duration": 83.0,
+        "sponsor": "Quince",
+        "sponsor_aliases": [
+          "quince.com"
+        ],
+        "sponsor_tags": [
+          "apparel",
+          "dtc",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "10ed0ed2-5574-4840-b122-944c673ea9b7",
+        "version": 2,
+        "submitted_at": "2026-05-31T02:30:45Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "26a0e318-50a2-40d8-bcb6-199f445b42db",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show today comes from the boldly named Granola. It can be a real struggle to get through back to back meetings. You're nodding along, contributing, trying to stay present, but in the back of your mind, you just want to go home and put on Olivia Rodrigo. Meetings can be a mess. Granola wants to fix that. Granola is an AI-powered notepad built for the way people actually meet. You simply take rough notes like you normally would, and in the background, Granola's securely transcribing the meeting. Then it turns everything into clean, structured, actually useful notes when the meeting ends. Then Granola works through your device's audio, which means it integrates seamlessly into the video conferencing tools you already use, no setup, no awkward bots. Granola says it's just your normal meeting with superpowers that you need to do your job better. So if meetings are eating up your day, Granola says there's a no-brainer situation here. You can try it totally free for three months. Just head to granola.ai.explained. It's granola.ai.explained to get your time back. Get three months free at granola.ai.explained.",
+        "intro_variants": [
+          "Support for the show today comes from the boldly named Granola."
+        ],
+        "outro_variants": [
+          "Get three months free at granola.ai.explained.",
+          "Get three months free at granola.ai slash explained."
+        ],
+        "avg_duration": null,
+        "sponsor": "Granola.ai",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "business",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "26a0e318-50a2-40d8-bcb6-199f445b42db",
+        "version": 1,
+        "submitted_at": "2026-05-31T02:31:58Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "576bbf9a-d3f6-4ac3-914b-92a3055458ec",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Pura's new summer collection. Find your flow and fragrance and explore the scents at Pura.com.",
+        "intro_variants": [],
+        "outro_variants": [
+          "Find your flow and fragrance and explore the scents at Pura.com."
+        ],
+        "avg_duration": null,
+        "sponsor": "Pura",
+        "sponsor_aliases": [
+          "pura.com"
+        ],
+        "sponsor_tags": [
+          "personal_care",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "576bbf9a-d3f6-4ac3-914b-92a3055458ec",
+        "version": 1,
+        "submitted_at": "2026-05-31T02:32:46Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "b6a9ca16-bb9c-44cb-a078-6407c76daa1c",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "That feeling when you're trying to build your credit. And it's like, over and over again. Good news! Chase Credit Journey can help you with a personalized score improvement plan provided by Experian. So when you still need that credit built, you have the guidance you need. You can even get a Chase Secure Banking account with no monthly service fee if you're 17 to 24 years old. Hallelujah! This tool is for education purposes and doesn't guarantee you'll reach your credit score goal. The score you receive uses VantageScore 3.0 model and may not be the model used by lenders. Member FDIC.",
+        "intro_variants": [
+          "That feeling when you're trying to build your credit. And it's like, over and over again."
+        ],
+        "outro_variants": [
+          "The score you receive uses VantageScore 3.0 model and may not be the model used by lenders. Member FDIC."
+        ],
+        "avg_duration": null,
+        "sponsor": "Chase Secure Banking",
+        "sponsor_aliases": [
+          "Chase Credit Journey"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "b6a9ca16-bb9c-44cb-a078-6407c76daa1c",
+        "version": 1,
+        "submitted_at": "2026-05-31T02:44:24Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "9dc55c46-16a7-475b-9b3d-7454485f397e",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This episode is brought to you by Nespresso. Life moves quickly and looking after yourself shouldn't feel like another chore. With the new Nespresso virtual up machine, morning routines become rituals. Whether organizing, getting the household moving, or preparing the home, or preparing the home. Preparing for the day, your coffee shouldn't ask for more. With Virtuo Up, just press brew and your morning begins. Rich aroma, bold flavor, zero effort. Press to explore. Every coffee, a new world. New Virtuo Up. Shop now at Nespresso.com.",
+        "intro_variants": [
+          "This episode is brought to you by Nespresso."
+        ],
+        "outro_variants": [
+          "Shop now at Nespresso.com."
+        ],
+        "avg_duration": null,
+        "sponsor": "Nespresso",
+        "sponsor_aliases": [
+          "nespresso.com",
+          "Virtuo Up"
+        ],
+        "sponsor_tags": [
+          "food",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "9dc55c46-16a7-475b-9b3d-7454485f397e",
+        "version": 1,
+        "submitted_at": "2026-05-31T17:32:36Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "58b26de4-b0f3-404a-adab-8978f067e92a",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Trying to complete your daily tasks can feel like driving along the highway, on empty, without a gas station in sight. If you're having a hard time finishing your day strong, then you might want to check out IM8's Daily Ultimate Essentials. It's a daily all-in-one wellness drink that can give your body the support it needs, without juggling a bunch of different supplements. IMAID's Daily Ultimate Essentials is a go-to for getting the benefits of 16 different supplements in one tasty drink. Co-founded by David Beckham and crafted with insight from experts at Mayo Clinic, Cedars-Sinai, and a former NASA chief scientist, it can simplify your wellness routine and make it easier to support your health. This drink is loaded with 92 nutrient-rich ingredients such as vitamins, minerals, adaptogens, CoQ10, MSM, and pre-, pro-, and postbiotics. It's designed to help you feel good from the inside out. Feel your best self every day with IM8. Go to im8health.com slash explained and use code EXPLAINED for a free welcome kit, 5 free travel sachets, plus 10% off your order. That's I-M number 8, H-E-A-L-T-H dot com slash explained, code explained. For a free welcome kit, 5 free travel sachets plus 10% off your order, im8health.com slash explained, code explained. These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease.",
+        "intro_variants": [
+          "Trying to complete your daily tasks can feel like driving along the highway, on empty, without a gas station in sight. If you're having a hard time finishing your day strong, then you might want to check out IM8's Daily Ultimate Essentials."
+        ],
+        "outro_variants": [
+          "For a free welcome kit, 5 free travel sachets plus 10% off your order, im8health.com slash explained, code explained. These statements have not been evaluated by the Food and Drug Administration. This product is not intended to diagnose, treat, cure, or prevent any disease."
+        ],
+        "avg_duration": null,
+        "sponsor": "IM8",
+        "sponsor_aliases": [
+          "im8health.com"
+        ],
+        "sponsor_tags": [
+          "health",
+          "mental_health",
+          "personal_care",
+          "self_improvement",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "58b26de4-b0f3-404a-adab-8978f067e92a",
+        "version": 1,
+        "submitted_at": "2026-05-31T17:37:26Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "506d8520-0a07-4b7b-a05e-f9b3cf6ace60",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hi, Diva. It's Rachel. And Jordan. Yeah, hi. Quick question. Why are you not spending your Venmo balance? Yeah, we're concerned. You can, like, buy stuff with it. Ugh, you love buying stuff. And earn cash back on eligible purchases. Mm, you love purchasing eligible things. things. So the money your friend sent you yesterday, that's today's ramen, or rideshare, or eye patches. The skincare kind, not the pyro kind. Spend with Venmo, and you can earn cash back with Venmo Stash. Venmo Stash bundle terms and exclusions apply. Max $100 cash back per month. See terms at Venmo.me slash slash terms. ID verification required to use a Venmo balance.",
+        "intro_variants": [
+          "Hi, Diva. It's Rachel. And Jordan. Yeah, hi. Quick question. Why are you not spending your Venmo balance?"
+        ],
+        "outro_variants": [
+          "ID verification required to use a Venmo balance."
+        ],
+        "avg_duration": null,
+        "sponsor": "Venmo",
+        "sponsor_aliases": [
+          "venmo.me"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "506d8520-0a07-4b7b-a05e-f9b3cf6ace60",
+        "version": 1,
+        "submitted_at": "2026-05-31T17:39:38Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "e856c58c-0260-4eb9-b82c-816a02590a9f",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Where's your playlist taking you? Down the highway? To the mountains? Or just into daydream mode while you're stuck in traffic? With over 4,000 hotels worldwide, Best Western is there to help you make the most of your getaway, wherever that is. Because the only thing better than a great playlist is a great trip. Life's the trip. Make the most of it at Best Western. Book direct and save at bestwestern.com.",
+        "intro_variants": [
+          "Where's your playlist taking you? Down the highway? To the mountains? Or just into daydream mode while you're stuck in traffic? With over 4,000 hotels worldwide, Best Western is there to help you make the most of your getaway"
+        ],
+        "outro_variants": [
+          "Book direct and save at bestwestern.com."
+        ],
+        "avg_duration": null,
+        "sponsor": "Best Western",
+        "sponsor_aliases": [
+          "bestwestern.com"
+        ],
+        "sponsor_tags": [
+          "travel",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "e856c58c-0260-4eb9-b82c-816a02590a9f",
+        "version": 1,
+        "submitted_at": "2026-05-31T17:42:36Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "85ef2479-3564-4cc7-990f-165b1198dd54",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show today comes from Takaya Tree. What's your favorite kind of tree? Mine is a Takaya Tree. If you've ever tried to find a psychiatrist who takes your insurance only to be told you have to wait months for an appointment or that they're not accepting patients. You're not alone. Talkiatry makes it easy to see a licensed psychiatrist online who takes your insurance in just a few days. It's virtual psychiatry designed to fit your life and your insurance. Talkiatry is 100% online psychiatry practice offering comprehensive evaluations, diagnoses, and ongoing medication management for conditions like ADHD, anxiety, depression, bipolar disorder, OCD. PTSD, insomnia, and even more. You can head to talkiatry.com slash explained and complete the short assessment to get matched with an in-network psychiatrist in just a few minutes. That's talkiatry.com slash explained to get matched in minutes. You know what else is 100% online? Me. I'm just kidding. I sleep.",
+        "intro_variants": [
+          "Support for the show today comes from Takaya Tree.",
+          "Support for the show today comes from Talkiatry."
+        ],
+        "outro_variants": [
+          "You can head to talkiatry.com slash explained and complete the short assessment to get matched with an in-network psychiatrist in just a few minutes.",
+          "That's talkiatry.com slash explained to get matched in minutes. You know what else is 100% online? Me. I'm just kidding. I sleep."
+        ],
+        "avg_duration": null,
+        "sponsor": "Talkiatry",
+        "sponsor_aliases": [
+          "talkiatry.com"
+        ],
+        "sponsor_tags": [
+          "health",
+          "mental_health",
+          "personal_care",
+          "self_improvement",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "85ef2479-3564-4cc7-990f-165b1198dd54",
+        "version": 1,
+        "submitted_at": "2026-05-31T17:49:55Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "42c2b217-586d-4ec7-ac86-ca2f0de2898d",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the program comes from PipeDrive. Sales teams can often spend a huge chunk of their time on administrative tasks rather than selling, building relationships, and closing deals required to maintain a strong business. That's where PipeDrive comes in, a simple, intelligent CRM tool for small and medium businesses with smart automations that handle repetitive stuff like follow-up reminders, deal updates, and activity logging. Plus, you can customize these automations to fit your business. Your unique sales process and AI features will analyze your pipeline. It'll flag stalled deals, surface what needs attention, and tell your team what to do next without having to go looking for it. You can switch to a CRM built by salespeople for salespeople and join the over 100,000 companies already using PipeDrive. With this link, you can get an exclusive 30-day free instead of the usual 14-day trial, no credit card or payment needed. Just head to Pipedrive.com slash explained to get started. That's Pipedrive.com slash explained. And you can be up and running in minutes.",
+        "intro_variants": [
+          "Support for the program comes from PipeDrive."
+        ],
+        "outro_variants": [
+          "That's Pipedrive.com slash explained. And you can be up and running in minutes."
+        ],
+        "avg_duration": null,
+        "sponsor": "PipeDrive",
+        "sponsor_aliases": [
+          "Pipe Drive",
+          "pipedrive.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "42c2b217-586d-4ec7-ac86-ca2f0de2898d",
+        "version": 1,
+        "submitted_at": "2026-05-31T17:50:40Z",
+        "submitted_app_version": "unknown",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "ca820a82-46fd-4735-8cdf-695941b8a9a6",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hey, everybody. Here's a fact for you. In the United States, there is a break-in every 26 seconds, and that means that somewhere right Now, an intruder is getting closer. And the problem with most security systems is that they only alert you after the break-in has started. And that's too late. Well, that's what makes SimpliSafe different. They use alerts. SimpliSafe's U.S.-based live agents, they identify threats on your property and help deter them before they actually break in. So the intruder never gets into your house. The crime has stopped before it even starts. That's right. And another great thing about SimpliSafe is they have no long-term contracts. They give you peace of mind and great value with their monitoring, Deterrence Plans because they just start at about a dollar a day Yeah SimpliSafe sent us a setup years back and I still use mine every day Yeah And apparently setup you can do it by yourself in under 30 minutes So it a really good value and it doesn take long So if you want to experience the SimpliSafe peace of mind you can take advantage of the SimpliSafe discount offered to Stuff You Should Know listeners Right now, you can get 50% off your new system by visiting simplisafe.com slash stuff. That's half off at simplisafe.com slash stuff. There's no safe like SimpliSafe.",
+        "intro_variants": [
+          "Hey, everybody. Here's a fact for you. In the United States, there is a break-in every 26 seconds, and that means that somewhere right Now, an intruder is getting closer."
+        ],
+        "outro_variants": [
+          "Right now, you can get 50% off your new system by visiting simplisafe.com slash stuff. That's half off at simplisafe.com slash stuff. There's no safe like SimpliSafe."
+        ],
+        "avg_duration": 77.0,
+        "sponsor": "SimpliSafe",
+        "sponsor_aliases": [
+          "Simpli Safe"
+        ],
+        "sponsor_tags": [
+          "home_security",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "ca820a82-46fd-4735-8cdf-695941b8a9a6",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.708522+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "1c1d3288-3bd2-46d8-817b-083f53fd08e8",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This summer, don't squeeze in, spread out. Find homes big enough for your whole guest list on Vrbo. From family reunions to trips with friends Vrbo has spacious summer stays for every group size and budget That vacation rentals done right Start exploring on Vrbo and book your next day now",
+        "intro_variants": [
+          "This summer, don't squeeze in, spread out. Find homes big enough for your whole guest list on Vrbo."
+        ],
+        "outro_variants": [
+          "Start exploring on Vrbo and book your next day now"
+        ],
+        "avg_duration": 21.0,
+        "sponsor": "Vrbo",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "travel",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "1c1d3288-3bd2-46d8-817b-083f53fd08e8",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.714790+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "92d7c018-b9ce-4ac8-9dd0-34c9c7e9e1fd",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Service opens doors, and at American Military University, it can open doors for the whole family. If you have a loved one who served in the military, you may qualify for reduced tuition. AMU offers flexible online programs designed to fit your schedule, so you can keep moving forward wherever life takes you. Learn more at amu.apus.edu slash military. Open doors to the future for you and your family, with the help of American Military University.",
+        "intro_variants": [
+          "Service opens doors, and at American Military University, it can open doors for the whole family."
+        ],
+        "outro_variants": [
+          "Open doors to the future for you and your family, with the help of American Military University."
+        ],
+        "avg_duration": 31.0,
+        "sponsor": "American Military University",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "education",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "92d7c018-b9ce-4ac8-9dd0-34c9c7e9e1fd",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.720892+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "4790f455-054e-4e42-a2d2-fda8264446dc",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "You know, it's hard to believe that the first phone call ever happened over 150 years ago. Just think about that, Chuck. Yeah, it was a long time ago. And, you know, I'm Gen X, so I grew up talking on the phone with my friends in high school and stuff. and it was a really fond memory. And you know, over all these years and all these phone calls, AT&T has been there, connecting people in meaningful ways. And this is more than a story of technological innovation, it's a story of human connection. That's right. Over that 150 years, there's been a lot of connection with people, whether it was me in high school or family connecting with one another long distance or those long distance relationships. And AT&T has been there for it all. Connecting changes everything. AT&T.",
+        "intro_variants": [
+          "You know, it's hard to believe that the first phone call ever happened over 150 years ago."
+        ],
+        "outro_variants": [
+          "Connecting changes everything. AT&T."
+        ],
+        "avg_duration": 39.0,
+        "sponsor": "AT&T",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "telecom",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "4790f455-054e-4e42-a2d2-fda8264446dc",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.729657+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "7ca2fe09-0b2d-45fb-be85-dc53c2ef4bc4",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Geico presents a 30-second podcast between your podcast. Today's story is shared by one of our listeners. It's called Betrayed by Bill. It was in that moment I caught who was staring back at me in betrayal, or more like what? My insurance bill? With trembling hands I grabbed my phone and switched to Geico, saving about $900 in the process and never to be betrayed again. Now that was bloody riveting. It feels good when the story ends with savings. It feels good to Geico.",
+        "intro_variants": [
+          "Geico presents a 30-second podcast between your podcast."
+        ],
+        "outro_variants": [
+          "It feels good when the story ends with savings. It feels good to Geico."
+        ],
+        "avg_duration": 32.0,
+        "sponsor": "Geico",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "insurance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "7ca2fe09-0b2d-45fb-be85-dc53c2ef4bc4",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.749764+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "72616542-5fc8-40ad-b885-4401603693c7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "With the all new Audi Q3. The answer is always yes. Yes to adventure. Yes to escape. Yes to right now. The all new Audi Q3 made for the yes life.",
+        "intro_variants": [
+          "With the all new Audi Q3. The answer is always yes.",
+          "With the all new Audi Q3, The answer is always yes."
+        ],
+        "outro_variants": [
+          "The all new Audi Q3 made for the yes life."
+        ],
+        "avg_duration": 25.0,
+        "sponsor": "Audi",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "automotive",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "72616542-5fc8-40ad-b885-4401603693c7",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.766995+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "4d554696-431c-4c84-98e4-0730f38a0ae6",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for today's Explained comes from Bilt Rewards. How do you like your rewards? I like mine, Bilt. Housing is probably one of, if not the biggest expense you're paying every month, so why not make that expense work for you? That's where Bilt comes in. Bilt is a membership program for where you live. That rewards you with points on every housing payment. Bilt started out rewarding members on their rent. Now, as of 2026, Bilt members can also earn points on mortgage payments. Mortgage points, hello! Every housing payment earns you points you can use towards flights with top travel partners. My favorite travel partner is my wife. Ha ha ha ha ha ha! Rides also, purchases, and so much more. Oh gosh, they have something called a neighborhood concierge too. Do you want to know what that is? Check out BILT. You can join the membership for where you live at joinbilt.com slash explain. That's J-O-I-N-B-I-L-T.com slash explain. Make sure to use our URL so they know we sent ya.",
+        "intro_variants": [
+          "Support for Eoday Explained comes from Bilt Rewards.",
+          "Support for today's Explained comes from Built Rewards."
+        ],
+        "outro_variants": [
+          "That's J-O-I-N-B-I-L-T.com slash explain. Make sure to use our URL so they know we sent ya."
+        ],
+        "avg_duration": null,
+        "sponsor": "Bilt",
+        "sponsor_aliases": [
+          "joinbilt.com"
+        ],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "4d554696-431c-4c84-98e4-0730f38a0ae6",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.775365+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "6b37486a-04c9-436c-abb7-3b5a3005f603",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "In business, there's no room for guesswork. Every shipment matters. Every deadline counts. When you're trying to keep operations running smoothly, the last thing you need is uncertainty. That's why reliability is at the core of USPS Ground Advantage. Each package moves through a secure nationwide network tracked from dock to door with affordable upfront pricing and delivery you can depend on. Because knowing your logistics are handled lets you focus on everything else. Visit usps.com slash ground advantage to start shipping with confidence. USPS Ground Advantage.",
+        "intro_variants": [
+          "In business, there's no room for guesswork. Every shipment matters."
+        ],
+        "outro_variants": [
+          "Visit usps.com slash ground advantage to start shipping with confidence. USPS Ground Advantage."
+        ],
+        "avg_duration": 18.0,
+        "sponsor": "USPS",
+        "sponsor_aliases": [
+          "usps.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "6b37486a-04c9-436c-abb7-3b5a3005f603",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.775365+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "e68f6b2f-cfee-4f63-816f-b417d638bfdf",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show comes from Quo. That kind of rhymes. If your team's communication is messy, missed messages, dropped threads, slow replies, customers can feel it too. Think about the customers. It's one of the easiest ways to lose momentum and that's why today's episode is brought to you by Quo. And in case you wondering it spelled Q Quo is the business communication system built so you never miss a call Quo isn just a phone system though guys it a smart one Their AI can automatically log calls generate summaries and flag next steps so nothing falls through the cracks And it can even qualify leads or respond after hours so your business stays on even when you are off Money is on the line my friends Always say hello with Quo Back to the rhymes You can try Quo for free Plus get 20% off your first six months when you go to Quo.com slash Explained. That's Quo.com slash Explained.",
+        "intro_variants": [
+          "Support for the show comes from Quo."
+        ],
+        "outro_variants": [
+          "You can try Quo for free Plus get 20% off your first six months when you go to Quo.com slash Explained. That's Quo.com slash Explained."
+        ],
+        "avg_duration": null,
+        "sponsor": "Quo.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "business",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "e68f6b2f-cfee-4f63-816f-b417d638bfdf",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.775365+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "59ff6bf7-7e2d-4f13-b870-cba9e2de92f8",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show today comes from WhatNot. And they provided me a pronunciation key that says, Oh, WhatNot, that's how it's pronounced, WhatNot, but it's one word, and WhatNot. If you sell products Podcast. I'm going to show you how difficult it can be to get noticed, but imagine if you sell products online or in a store. You could spend hours sourcing inventory, setting up your storefront, and creating listings, and then you're left waiting, hoping the right customer eventually comes across what you're selling. WhatNot wants to change that model. WhatNot is the largest dedicated live shopping platform, whether it's beauty, collectibles, electronics, luxury, fashion, even cookies, you guys. And our colleague Claire White has tried Whatnot. I had a really great time going through the variety of auctions that they had on Whatnot. It's not just clothes. It's not just jewelry. It's not just tech even, but vintage China, antique pieces, places around the world where folks are selling knickknacks from their vintage stores, from their archive, whatever it is. There's a ton of variety on Whatnot, just beyond what you would think for an auction house. Search Whatnot, W-H-A-T-N-O-T, one word, in the App Store, download, and you can start selling right away.",
+        "intro_variants": [
+          "Support for the show today comes from WhatNot."
+        ],
+        "outro_variants": [
+          "Search Whatnot, W-H-A-T-N-O-T, one word, in the App Store, download, and you can start selling right away."
+        ],
+        "avg_duration": 90.0,
+        "sponsor": "WhatNot",
+        "sponsor_aliases": [
+          "What Not"
+        ],
+        "sponsor_tags": [
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "59ff6bf7-7e2d-4f13-b870-cba9e2de92f8",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.798019+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "526a2c10-0720-4c77-b278-21d157839ba8",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Wouldn't it be great to never buy gas again? EVs are as easy to charge as your phone and they are a perfect addition to your everyday life. Most people are only driving about 40 miles a day and most EVs can handle 200 to 400 miles of range on a charge. And there are hundreds of EV models available today, so there's something perfect for every lifestyle and budget. I drive an EV. I've had it for a couple of years. It's my favorite car I've ever owned. It is so fun to drive. The pickup is incredible. It's super agile and it is easy to maintain. The way forward is electric. Learn more at electricforall.org.",
+        "intro_variants": [
+          "Wouldn't it be great to never buy gas again?"
+        ],
+        "outro_variants": [
+          "The way forward is electric. Learn more at electricforall.org."
+        ],
+        "avg_duration": 83.65,
+        "sponsor": "electricforall.org",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "automotive",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "526a2c10-0720-4c77-b278-21d157839ba8",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.812876+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "675aafc9-4c76-4a96-b1b8-883c7ee993ad",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Cashflow Crunch? OnDeck's small business line of credit gives your business immediate access to funds up to $200,000 right when you need it. Cover seasonal dips, manage payroll, restock inventory, or tackle unexpected expenses without missing a beat. With flexible draws, transparent pricing, and control over repayment, get funded quickly and confidently. Apply today at Ondec.com. Funds could be available as soon as tomorrow. Depending on certain loan attributes, your business loan may be issued by Ondec or Celtic Bank. Ondeck does not lend in North Dakota. All loans and amounts subject to lender approval.",
+        "intro_variants": [
+          "Cashflow Crunch? OnDeck's small business line of credit gives your business immediate access to funds up to $200,000 right when you need it."
+        ],
+        "outro_variants": [
+          "Ondeck does not lend in North Dakota. All loans and amounts subject to lender approval."
+        ],
+        "avg_duration": 56.0,
+        "sponsor": "OnDeck",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "finance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "675aafc9-4c76-4a96-b1b8-883c7ee993ad",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.821131+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "56bbe39c-a8c9-469a-976e-0ced39e402c6",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for Today Explained comes from CNN. Cool. Cable News Network, what's up? Do you want to live forever? What? Yes. Maybe? I haven't thought about it that much. Influential journalist Kara Swisher, I know her, is taking a hard look at the longevity industry to separate the influencer hype from evidence-backed science in her new CNN original series. Cool, Kara. Kara's talking to Silicon Valley power players and trying out the latest in anti-aging technology to see what works and what's a waste. I bet she is. Kara Swisher wants to live forever. New episodes streaming Sundays with a CNN subscription. Go to CNN.com slash subscribe to start watching.",
+        "intro_variants": [
+          "Support for Today Explained comes from CNN."
+        ],
+        "outro_variants": [
+          "New episodes streaming Sundays with a CNN subscription. Go to CNN.com slash subscribe to start watching."
+        ],
+        "avg_duration": 66.1,
+        "sponsor": "CNN",
+        "sponsor_aliases": [
+          "Cable News Network"
+        ],
+        "sponsor_tags": [
+          "news",
+          "tv_film",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "56bbe39c-a8c9-469a-976e-0ced39e402c6",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.855400+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "6c6c9635-07c6-44c8-b7e3-a26770f531a7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "On eBay, every find has a story. Like if you're looking for a vintage band tee. Not just a tee. THE band tee. You wore it everywhere, until your ex-boyfriend stole it. Now you're on eBay, and there it is. Same tee, from the same tour. The things you love have a way of finding their way back to you, especially on eBay. Where else can you find that mint trading card you search for everywhere that's out of print? Or your first car, the one you wish you'd never sold? It has to be eBay. Shop eBay for millions of finds, each with a story. eBay, Things People Love.",
+        "intro_variants": [
+          "On eBay, every find has a story."
+        ],
+        "outro_variants": [
+          "Shop eBay for millions of finds, each with a story. eBay, Things People Love."
+        ],
+        "avg_duration": null,
+        "sponsor": "eBay",
+        "sponsor_aliases": [
+          "universal"
+        ],
+        "sponsor_tags": [],
+        "source_language": null,
+        "community_id": "6c6c9635-07c6-44c8-b7e3-a26770f531a7",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.883229+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "ee5acf8b-8094-43ae-b4f8-44ac9d3e7439",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Whether you're calling the wise women in your life, video calling your girlfriends across the country, or checking in on someone who always knows how to make you smile, staying connected matters. Those small conversations, shared laughs, and quick hellos are what keep relationships strong, even when life gets busy. Some of the most life-giving conversations start with just a phone call. That's why AT&T guarantees a network you can rely on so you can focus on the moments and people that matter most. That's the AT&T guarantee. AT&T connecting changes everything. Terms and conditions apply. Just visit att.com slash guarantee for details.",
+        "intro_variants": [
+          "Whether you're calling the wise women in your life, video calling your girlfriends across the country, or checking in on someone who always knows how to make you smile, staying connected matters."
+        ],
+        "outro_variants": [
+          "AT&T connecting changes everything. Terms and conditions apply. Just visit att.com slash guarantee for details"
+        ],
+        "avg_duration": null,
+        "sponsor": "AT&T",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "telecom",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "ee5acf8b-8094-43ae-b4f8-44ac9d3e7439",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.890967+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "fdec9424-e3af-4a2c-85ce-014504d61f1a",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "At Arizona State University, we're bringing world-class education from our globally acclaimed faculty to you. Earn your degree from the nation's most innovative university online. That's a degree better. Learn more at asuonline.asu.edu",
+        "intro_variants": [
+          "At Arizona State University, we're bringing world-class education from our globally acclaimed faculty to you."
+        ],
+        "outro_variants": [
+          "That's a degree better. Learn more at asuonline.asu.edu"
+        ],
+        "avg_duration": null,
+        "sponsor": "Arizona State University",
+        "sponsor_aliases": [
+          "asu.edu"
+        ],
+        "sponsor_tags": [
+          "education",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "fdec9424-e3af-4a2c-85ce-014504d61f1a",
+        "version": 1,
+        "submitted_at": "2026-06-05T00:54:04.895915+00:00",
+        "submitted_app_version": "2.6.2",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "66c2ae87-6f65-4f83-99db-1df670b9ef79",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This is Chelsea Handler from Dear Chelsea. The Trump administration and its backers in Congress are messing around with our healthcare. In case you haven't heard, they already passed a law defunding De-Funding Planned Parenthood that blocks Medicaid patients from getting life-saving care like cancer screenings, wellness exams, birth control, STI treatment, and more. And now these lawmakers want to shut down health centers by defunding Planned Parenthood permanently. Our communities deserve better. So to learn how you can get involved, text UPDATE to 22422.",
+        "intro_variants": [
+          "This is Chelsea Handler from Dear Chelsea. The Trump administration and its backers in Congress are messing around with our healthcare."
+        ],
+        "outro_variants": [
+          "Our communities deserve better. So to learn how you can get involved, text UPDATE to 22422."
+        ],
+        "avg_duration": null,
+        "sponsor": "Planned Parenthood",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health"
+        ],
+        "source_language": null,
+        "community_id": "66c2ae87-6f65-4f83-99db-1df670b9ef79",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.087480+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "1450b9f9-be28-4e4e-9995-62d6fecf2645",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Everyone knows winter is the real mess maker. You don't need WeatherTech floor liners for summer unless you hit the beach and half the beach ends up back in your car or the campsite dirt ends up in your trunk. Then you'd want a cargo liner or a road trip go sideways, drink spills, ketchup goes rogue, ice cream drips. Yeah, you'd be pretty happy about those WeatherTech seat protectors. So just to be clear, as the mud you're inevitably going to step in this summer, you don't need WeatherTech. Unless you plan on doing summer. Visit WeatherTech.com today.",
+        "intro_variants": [
+          "Everyone knows winter is the real mess maker. You don't need WeatherTech floor liners for summer unless you hit the beach and half the beach ends up back in your car or the campsite dirt ends up in your trunk."
+        ],
+        "outro_variants": [
+          "Unless you plan on doing summer. Visit WeatherTech.com today."
+        ],
+        "avg_duration": 34.3,
+        "sponsor": "WeatherTech",
+        "sponsor_aliases": [
+          "weathertech.com"
+        ],
+        "sponsor_tags": [
+          "auto",
+          "automotive"
+        ],
+        "source_language": null,
+        "community_id": "1450b9f9-be28-4e4e-9995-62d6fecf2645",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.096569+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "805866fc-a8a8-43b1-8595-c94d1b3bb2eb",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "My name is Jessa. One of the things I love the most about working for UnitedHealthcare is that everybody matters. Every moment matters. There's a person behind every problem. I care because it's what I was put on this earth to do. I'm Ben and I work at UnitedHealthcare. I am just one piece of a larger puzzle, but every piece matters. It's more than just work. We want to make the healthcare system better for everyone. I care because I want to make a difference. That's what committed to care means to me.",
+        "intro_variants": [
+          "My name is Jessa. One of the things I love the most about working for UnitedHealthcare is that everybody matters.",
+          "My name is Jessa One of the things I love the most about working for UnitedHealthcare is that everybody matters",
+          "I'm Ben and I work at UnitedHealthcare. I am just one piece of a larger puzzle, but every piece matters."
+        ],
+        "outro_variants": [
+          "I care because I want to make a difference. That's what committed to care means to me."
+        ],
+        "avg_duration": 30.1,
+        "sponsor": "UnitedHealth Group",
+        "sponsor_aliases": [
+          "UnitedHealthcare"
+        ],
+        "sponsor_tags": [
+          "health",
+          "insurance"
+        ],
+        "source_language": null,
+        "community_id": "805866fc-a8a8-43b1-8595-c94d1b3bb2eb",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.105048+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "4f8fdef3-d60c-4b50-a11b-935ccf5658a6",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hey, Lisa here. And don't you hate when it's super hot out and you're stressing over whether your window AC unit will work and keep up with all the heat? Well, imagine a window air conditioner that is sleek, better looking, quieter, and here's the best part, easier to install. Well, it's an absolute reality with the Windmill Window AC Unit made for the modern home. Windmill set out to create the best window AC with a clean design, quiet cooling, single setup with the app and voice control. You can use the app and turn the AC on remotely so your place will be perfectly cool when you get home. So if your window AC is old, loud, or kind of a clunky eyesore, it's time to upgrade to a windmill AC unit. Windmill ACs are available at trusted retailers or just visit windmillair.com.",
+        "intro_variants": [
+          "Hey, Lisa here. And don't you hate when it's super hot out and you're stressing over whether your window AC unit will work and keep up with all the heat?"
+        ],
+        "outro_variants": [
+          "Windmill ACs are available at trusted retailers or just visit windmillair.com.",
+          "Windmill A.C.s are available at trusted retailers or just visit windmillair.com."
+        ],
+        "avg_duration": 53.8,
+        "sponsor": "windmillair.com",
+        "sponsor_aliases": [
+          "Windmill Air",
+          "Windmill AC",
+          "Windmill A.C."
+        ],
+        "sponsor_tags": [],
+        "source_language": null,
+        "community_id": "4f8fdef3-d60c-4b50-a11b-935ccf5658a6",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.116636+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "8db5b1bc-7d61-49da-a74d-1cef2ee2a641",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "The springtime thaw is finally here. Flowers are blooming. Days are longer. We're saying yes to more plans and finally getting outside. Running, walking, just moving again. It's the perfect time to upgrade your everyday go-tos with Bombas. Take Bombas sport socks. They're super comfortable and designed with sports specific tech for running, cycling, yoga, hiking, you name it. I use them to run in and I can tell you they work beautifully. So head over to Bombas.com and use code SYSK for 20% off your first purchase. That's B-O-M-B-A-S dot com, code SYSK at checkout.",
+        "intro_variants": [
+          "The springtime thaw is finally here. Flowers are blooming. Days are longer.",
+          "Support for Today Explained comes from Bombas."
+        ],
+        "outro_variants": [
+          "So head over to Bombas.com and use code SYSK for 20% off your first purchase. That's B-O-M-B-A-S dot com, code SYSK at checkout.",
+          "You can go to Bombas.com slash explained and use the code explained for 20% off your first purchase. That's B-O-M-B-A-S dot com slash explained, code explained at checkout."
+        ],
+        "avg_duration": 33.7,
+        "sponsor": "Bombas",
+        "sponsor_aliases": [
+          "bombas.com"
+        ],
+        "sponsor_tags": [
+          "apparel",
+          "dtc",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "8db5b1bc-7d61-49da-a74d-1cef2ee2a641",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.145114+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "6f17b466-0d54-4eab-8e0b-f74396bc5bb1",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Work can be a little weird. Cringy training seminars, co-workers who won't stop talking about their plant, forgetting the mute button at an inopportune moment. We have to deal with a lot on any given work day. Sometimes it can feel hard to thrive and move forward in your career. Well, that's where LinkedIn comes in. LinkedIn helps you get ideas and insights from experts in your field, connect with people professionally, grow your network, and access tools designed to help you find the and the right fit for your next role. Whether you're just getting started, figuring out your next move, or looking to accelerate your career, LinkedIn is built to support you at every stage. Because LinkedIn is the network that works for you. Visit linkedin.com slash class to learn more.",
+        "intro_variants": [
+          "Work can be a little weird. Cringy training seminars, co-workers who won't stop talking about their plant, forgetting the mute button at an inopportune moment.",
+          "Work can be a little weird. One minute you're in a meeting that could have been an email, the next you're trying to decode corporate jargon that somehow means nothing, and don't even get me started on the quick sync that turns into a 45-minute deep dive.",
+          "Work can be a little weird and I know when I first started working, networking for work was even weirder."
+        ],
+        "outro_variants": [
+          "Visit linkedin.com slash class to learn more.",
+          "Because LinkedIn is the network that works for you."
+        ],
+        "avg_duration": 26.5,
+        "sponsor": "LinkedIn",
+        "sponsor_aliases": [
+          "LinkedIn Jobs",
+          "linkedin.com"
+        ],
+        "sponsor_tags": [
+          "jobs",
+          "tech",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "6f17b466-0d54-4eab-8e0b-f74396bc5bb1",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.153199+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "11e574d7-9552-4de9-9d82-9c65388674a7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for Today Explained comes from Shopify. When you're starting a new business, it's easy to doubt. You might ask yourself, should I? Should I really? What if no one cares? Maybe a better way to think about it is, what if this is a great decision? Cisun Shopify wants to help you answer that question Shopify is a commerce platform powering millions of businesses worldwide from established brands such as Mattel and Converse To companies just getting started their design tools make it easy to help build the online presence you imagining with hundreds of ready templates to choose from Everything is all in one place helping make your life easier and your business operations smoother And with built marketing tools you can create full email and social campaigns in just a few clicks so you can reach your customers wherever they are. If you get stuck Shopify is always around to share advice with their 24 customer support.",
+        "intro_variants": [
+          "Support for Today Explained comes from Shopify."
+        ],
+        "outro_variants": [
+          "If you get stuck Shopify is always around to share advice with their 24 customer support."
+        ],
+        "avg_duration": 38.2,
+        "sponsor": "Shopify",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "tech",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "11e574d7-9552-4de9-9d82-9c65388674a7",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.173825+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "cedb2519-ff07-48d8-acc6-7c5d3b2ef1e7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "At first, I didn't think it was real. I woke up to this blinding light and I was transported to another place. Pluto TV! Then I heard a voice. Come with me if you want to live. There were thousands of movies and shows and they were all free. The truth is ours. It's just so beautiful. On Pluto TV, free streaming of Terminator 2, Fringe, Arrow, The 100, and The X-Files may cause excitement, loss of sleep, and sudden belief in extraterrestrials. No credit cards or alien encounters necessary. Pluto TV. Stream now. Pay never.",
+        "intro_variants": [
+          "At first, I didn't think it was real. I woke up to this blinding light and I was transported to another place."
+        ],
+        "outro_variants": [
+          "Pluto TV. Stream now. Pay never."
+        ],
+        "avg_duration": 30.0,
+        "sponsor": "Pluto TV",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "tv_film",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "cedb2519-ff07-48d8-acc6-7c5d3b2ef1e7",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.195010+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "8e81eb4d-0fe5-4676-be10-5c78428c3ab9",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for this show comes from Norwegian Cruise Line. A cruise with Norwegian is a vacation you'll never forget, with an onboard experience that makes it easy for the whole family to settle into their own version of vacation. Because on a cruise with Norwegian, choice comes naturally for the whole family, and destinations feel just as effortless. Wander beautiful cities and take in stunning natural scenery. Norwegian Cruise Line, it's different out here. Visit ncl.com, call your travel advisor, or 1-888-NCL-CRUISE. Norwegian Cruise Line, Chips Registry, The Bahamas, and USA.",
+        "intro_variants": [
+          "Support for this show comes from Norwegian Cruise Line."
+        ],
+        "outro_variants": [
+          "Visit ncl.com, call your travel advisor, or 1-888-NCL-CRUISE.",
+          "Norwegian Cruise Line, Chips Registry, The Bahamas, and USA."
+        ],
+        "avg_duration": 29.9,
+        "sponsor": "Norwegian Cruise Line",
+        "sponsor_aliases": [
+          "ncl.com"
+        ],
+        "sponsor_tags": [
+          "travel"
+        ],
+        "source_language": null,
+        "community_id": "8e81eb4d-0fe5-4676-be10-5c78428c3ab9",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.203569+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "6e8ba47a-5cd5-458f-a427-24529a375ead",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "The question isn't whether the world is changing. It's whether you'll be ready for it. At Arizona State University, your education is built around the careers of the future. You learn from renowned faculty and researchers who are driving their fields forward, not just teaching about it. It's why we're ranked number one in innovation and number two in employability among U.S. public universities. Future-proof your career. Explore more than 350 programs at asuonline.asu.edu. That's a degree better.",
+        "intro_variants": [
+          "The question isn't whether the world is changing. It's whether you'll be ready for it."
+        ],
+        "outro_variants": [
+          "Explore more than 350 programs at asuonline.asu.edu. That's a degree better."
+        ],
+        "avg_duration": 29.6,
+        "sponsor": "Arizona State University",
+        "sponsor_aliases": [
+          "asu.edu"
+        ],
+        "sponsor_tags": [
+          "education",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "6e8ba47a-5cd5-458f-a427-24529a375ead",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.232045+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "7d1fb627-c041-4ce2-a2a0-424b2312c195",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "The future won't wait, and neither should you. That's why American Public University offers master's programs designed for momentum, affordable, high quality, and flexible, so you keep moving forward. With career-relevant programs in business, healthcare, education, IT, and more, you can gain skills you can use right away, and the confidence to power your next move. American Public University, made for what's next. Learn more at apu.apus.edu.",
+        "intro_variants": [
+          "The future won't wait, and neither should you."
+        ],
+        "outro_variants": [
+          "American Public University, made for what's next. Learn more at apu.apus.edu."
+        ],
+        "avg_duration": 27.9,
+        "sponsor": "American Public University",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "education",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "7d1fb627-c041-4ce2-a2a0-424b2312c195",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.239163+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "16828581-6e7a-40d7-b479-58029dadd2bf",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This episode is also sponsored by our friends at Apollo Automation, makers of open source smart home sensors built for the Home Assistant ecosystem. They're an official Open Home Foundation commercial partner and their devices are built with local control, privacy and reliability in mind. Almost everything they offer is works with Home Assistant and made for ESP Home certified, giving you full control and flexibility right out of the box. And the best part, they build in the open, working directly with the community to create sensors that people actually need. If you're deep into Home Assistant or just getting started, definitely check them out at ApolloAutomation.com.",
+        "intro_variants": [
+          "This episode is also sponsored by our friends at Apollo Automation, makers of open source smart home sensors built for the Home Assistant ecosystem.",
+          "This episode is sponsored by Apollo Automation, makers of open source smart home sensors built for the Home Assistant ecosystem."
+        ],
+        "outro_variants": [
+          "If you're deep into Home Assistant or just getting started, definitely check them out at ApolloAutomation.com."
+        ],
+        "avg_duration": 41.4,
+        "sponsor": "Apollo Automation",
+        "sponsor_aliases": [
+          "apolloautomation.com"
+        ],
+        "sponsor_tags": [
+          "technology"
+        ],
+        "source_language": null,
+        "community_id": "16828581-6e7a-40d7-b479-58029dadd2bf",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.248449+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "78ca4505-290b-485e-8be9-e512ffaac455",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This is Matt Rogers from Las Culturistas, that's with Matt Rogers and Bowen Yang. This is Bowen Yang from Las Culturistas with Matt Rogers and Bowen Yang. Hey Bowen, is it just me or does it feel like nothing is actually what it says it is anymore? Yeah, like when you order chicken fingers, you don't get fingers, you get mystery nuggets. Exactly. Well, except Hotels.com I was gonna say, Hotels.com, because they do hotels. Refreshing. And when booked as a member, rewards are earned every stay, not points that disappear, rewards that work like cash and can actually be used. So the name checks out, and the perks do too. Yep, members can get up to 20% off tons of hotels with no blackout dates, just works with real travel. Okay, that tracks. Hotels.com, it's all in the name.",
+        "intro_variants": [
+          "This is Matt Rogers from Las Culturistas, that's with Matt Rogers and Bowen Yang.",
+          "Hey Bowen, is it just me or does it feel like nothing is actually what it says it is anymore?"
+        ],
+        "outro_variants": [
+          "Hotels.com, it's all in the name."
+        ],
+        "avg_duration": 41.7,
+        "sponsor": "Hotels.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "travel",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "78ca4505-290b-485e-8be9-e512ffaac455",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.258500+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "d3b7c369-86f8-4144-83e3-1bbbfdba233e",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hey guys, it's Dasha here. The World Cup brings cities to life. Streets buzzing, crowds gathering, every goal sparking celebration. Moments like this are impossible to miss, but some moments are so quiet. They slip right past us. Human trafficking affects real people across the U.S., and it often looks different from what we think. Some survivors cannot simply walk away or ask for help. So learn the signs. Break the silence. Visit bluecampaign.gov slash World Cup.",
+        "intro_variants": [
+          "Hey guys, it's Dasha here. The World Cup brings cities to life. Streets buzzing, crowds gathering, every goal sparking celebration."
+        ],
+        "outro_variants": [
+          "Visit bluecampaign.gov slash World Cup.",
+          "Visit bluecampaign.gov slash worldcup."
+        ],
+        "avg_duration": 27.6,
+        "sponsor": "bluecampaign.gov",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "d3b7c369-86f8-4144-83e3-1bbbfdba233e",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.266816+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "1881ba6f-92c7-4f0c-b1fe-2e3cc828bc9e",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "We've all done it. Tumbled down an internet rabbit hole trying to heal ourself. And sometimes doing our own research can leave us more anxious than informed. Your feed is packed with wellness trends telling you to cold plunge protein max detox track your sleep. But what's actually real? What's exaggerated? What's just wrong? That exactly what Health vs Hype from the American Medical Association are doing. Each episode, Emmy-nominated science communicator Trace Dominguez, who's racked up billions of views across channels, talks to doctors, influencers, and real people trying these trends. Not to cancel them, not to hype them more, but to actually understand them. Because when it comes to your health, who you listen to matters. Start asking better questions and listen to Health vs. Hype on the app or wherever you get your podcasts.",
+        "intro_variants": [
+          "We've all done it. Tumbled down an internet rabbit hole trying to heal ourself."
+        ],
+        "outro_variants": [
+          "Start asking better questions and listen to Health vs. Hype on the app or wherever you get your podcasts."
+        ],
+        "avg_duration": 63.0,
+        "sponsor": "Health vs Hype",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health"
+        ],
+        "source_language": null,
+        "community_id": "1881ba6f-92c7-4f0c-b1fe-2e3cc828bc9e",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.285887+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "95d531ca-91af-4bdc-9406-469dd4bed29b",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Brought to you in part by Vital Farms. I love eggs. I turn to them all the time as a quick and easy way to start a meal. And Vital Farms eggs are brought to you by hens that have access to fresh air and sunshine. And you can actually look up on the carton and see the farm that those eggs came from. Vital Farms is also a certified B Corporation with a purpose to improve the lives of people, animals, and the planet through food. Look for the black egg carton in the egg aisle and visit VitalFarms.com to learn more. Vital Farms, good eggs, no shortcuts.",
+        "intro_variants": [
+          "Brought to you in part by Vital Farms.",
+          "This podcast is brought to you in part by Vital Farms."
+        ],
+        "outro_variants": [
+          "Vital Farms, good eggs, no shortcuts."
+        ],
+        "avg_duration": 32.6,
+        "sponsor": "Vital Farms",
+        "sponsor_aliases": [
+          "VitalFarms.com"
+        ],
+        "sponsor_tags": [
+          "food"
+        ],
+        "source_language": null,
+        "community_id": "95d531ca-91af-4bdc-9406-469dd4bed29b",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.309540+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "e341ebe0-6757-48fe-a614-5802e3854bcd",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Hey girl it's Teffy. This week on Teffy Talks we talking Kendall and Jacob reality TV villain Spencer Pratt running for mayor and a look inside the Cannes Film Festival. Mind you I bought the majority of my crystals from Pratt Daddy Crystals. Incredible quality but I never thought he be running for mayor and it does pain me to say the words Pratt Daddy. If you not already following the show find us everywhere at Teffy Talks. Subscribe on all the podcast platforms so you can share with your other work bestie. See ya.",
+        "intro_variants": [
+          "Hey girl it's Teffy."
+        ],
+        "outro_variants": [
+          "Subscribe on all the podcast platforms so you can share with your other work bestie."
+        ],
+        "avg_duration": 30.6,
+        "sponsor": "Teffy Talks",
+        "sponsor_aliases": [],
+        "sponsor_tags": [],
+        "source_language": null,
+        "community_id": "e341ebe0-6757-48fe-a614-5802e3854bcd",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.318392+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "7391620b-9c2b-43a0-82ce-9a8fc7cedba7",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Let's talk about Peyronie's disease, or PD. It's not widely talked about, and some men may feel reluctant to bring it up, but it's more common than you'd think. PD can happen when scar tissue builds up under the skin of the penis causing a curve with a bump during an erection that for some men may lead to pain during intimacy and impact mental health A trusted urology specialist can help diagnose PD and walk you through your options, including nonsurgical treatment. Visit TalkAboutPD.com.",
+        "intro_variants": [
+          "Let's talk about Peyronie's disease, or PD."
+        ],
+        "outro_variants": [
+          "Visit TalkAboutPD.com."
+        ],
+        "avg_duration": 28.4,
+        "sponsor": "talkaboutpd.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health"
+        ],
+        "source_language": null,
+        "community_id": "7391620b-9c2b-43a0-82ce-9a8fc7cedba7",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.339897+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "42188d07-4385-4a70-b392-e6bac00ceb99",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Looking for something new? Try fencing. The Olympic and Paralympic sport that mixes speed, strategy, and fun. It's like chess meets cardio, quick feet, quick decisions, and a satisfying beep when you score a point. Kids, teens, and adults can start anytime, no experience needed, and many clubs have loner gear. Coaches teach fundamentals and safety from day one. Find a beginner class for your kids near you at Tryfencing.org. That's Tryfencing.org.",
+        "intro_variants": [
+          "Looking for something new? Try fencing."
+        ],
+        "outro_variants": [
+          "Find a beginner class for your kids near you at Tryfencing.org. That's Tryfencing.org."
+        ],
+        "avg_duration": 28.2,
+        "sponsor": "tryfencing.org",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "sports"
+        ],
+        "source_language": null,
+        "community_id": "42188d07-4385-4a70-b392-e6bac00ceb99",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.348539+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "42362008-ce03-4876-9c46-59afcdbc43ff",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "This ad is brought to you by Veeve Healthcare, the makers of Dovato, Dolutegravir, Lamivudine. If you living with HIV do learn about Dovato. Dovato is a complete HIV treatment by prescription only for some people 12 and older Your doctor will determine if Dovato is right for you Most HIV pills contain three or four medicines. Dovato is as effective with just two. No other complete HIV pill contains fewer medicines than Dovato It is unknown if Dovato is safe and effective if you have HIV and hepatitis B. If you have Hep B, don't stop Dovato without talking to your doctor, as it may get worse or harder to treat. Don't take Dovato if you're allergic to its ingredients or taking Daphetilide due to serious or life-threatening side effects. If you have a rash or allergic reaction symptoms, stop Dovato and get medical help right away. Other serious or life-threatening side effects include severe liver problems and lactic acid buildup. If you're female or obese, you may be more at risk. Tell your doctor about your medicines or supplements, medical conditions, liver or kidney problems, pregnancy, breastfeeding or planned pregnancy. Do ask your doctor about fewer medicines. Visit dovato.com or call 1-877-844-8872.",
+        "intro_variants": [
+          "This ad is brought to you by Veeve Healthcare"
+        ],
+        "outro_variants": [
+          "Visit dovato.com or call 1-877-844-8872.",
+          "Visit devato.com or call 1-877-844-8872.",
+          "Visit davado.com or call 1-877-844-8872."
+        ],
+        "avg_duration": 65.0,
+        "sponsor": "Dovato",
+        "sponsor_aliases": [
+          "Dovado",
+          "Devato",
+          "Dolutegravir",
+          "Lamivudine",
+          "Veeve Healthcare"
+        ],
+        "sponsor_tags": [
+          "health"
+        ],
+        "source_language": null,
+        "community_id": "42362008-ce03-4876-9c46-59afcdbc43ff",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.375380+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "e5f2453a-1d25-4863-a596-24ffcfc6c603",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Mom I'm heading out. You're wearing shorts. It's freezing. And wear your coat. I'm good, bye mom! Does your tween care more about looking cool than staying warm? Time to talk to their doctor about HPV vaccination to help protect them against certain HPV-related cancers before exposure. For most people, HPV clears on its own. But for those who don't clear the virus, it can cause certain cancers later in life. Why wait to vaccinate?",
+        "intro_variants": [
+          "Mom I'm heading out. You're wearing shorts. It's freezing. And wear your coat. I'm good, bye mom!"
+        ],
+        "outro_variants": [
+          "For most people, HPV clears on its own. But for those who don't clear the virus, it can cause certain cancers later in life. Why wait to vaccinate?"
+        ],
+        "avg_duration": 26.4,
+        "sponsor": "HPV",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "e5f2453a-1d25-4863-a596-24ffcfc6c603",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.382690+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "9b2906ca-54dc-4acf-bc75-095f1f3da584",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for today's Explained comes from Rippling. Lots of apps call themselves all-in-one platforms. Despite that, Rippling says you're probably still using more than one of them to run your business. Rippling says they can help you simplify once and for all. Rippling is a united platform for global HR, payroll, IT, and finance. With Rippling, they say workflows that normally bounce between several tools and departments actually just do happen in one place automatically. Let's say you have an employee getting promoted. Rippling says you can use their platform to update their payroll taxes, manage any new app permissions, ship them a laptop, issue a new corporate card, assign trainings. You can run all of your HR, IT and finance operations as one or pick and choose what your business needs. So if you or your company want to run the backbone of your business on one unified platform with people at the center, you can go to Rippling.com slash explain and sign up today. That's R-I-P-P-L-I-N-G dot com slash explain to sign up.",
+        "intro_variants": [
+          "Support for today's Explained comes from Rippling."
+        ],
+        "outro_variants": [
+          "That's R-I-P-P-L-I-N-G dot com slash explain to sign up."
+        ],
+        "avg_duration": 56.7,
+        "sponsor": "Rippling",
+        "sponsor_aliases": [
+          "rippling.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "jobs",
+          "tech",
+          "saas"
+        ],
+        "source_language": null,
+        "community_id": "9b2906ca-54dc-4acf-bc75-095f1f3da584",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.395179+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "937bc38d-f58a-48f7-9ced-4d5c0eb38fd1",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show today comes from SelectQuote. It's never a bad time to start taking your financial future more seriously. And one thing that often gets overlooked in the mix is term life insurance. You know what I mean? But figuring out coverage can feel complicated. How much do you need? What does it cost? And where do you even start? But SelectQuote? Quote wants to make things easier and more affordable. For over 40 years, like me, SelectQuote has helped more than 2 million Americans secure over $700 billion in coverage. I haven't done that, but I've been around for more than 40 years, as of late, actually. Sounds like I should get some life insurance. Their goal is simple, help you find a term life insurance policy that fits your needs and budget. They do the shopping for you so you can save time and money. And in many cases, SelectQuote can give you same-day coverage, up to $2 million, no doctor's visit required. You can get the right life insurance for you for less and save more than 50% at selectquote.com. You can save more than 50% on term life insurance at selectquote.com. Today to get started, that's selectquote.com. Explained.",
+        "intro_variants": [
+          "Support for the show today comes from SelectQuote."
+        ],
+        "outro_variants": [
+          "You can save more than 50% on term life insurance at selectquote.com. Today to get started, that's selectquote.com. Explained.",
+          "You can save more than 50% on term life insurance at selectquote.com. Today to get started, that's selectquote.com slash explained."
+        ],
+        "avg_duration": 63.0,
+        "sponsor": "SelectQuote",
+        "sponsor_aliases": [
+          "Select Quote"
+        ],
+        "sponsor_tags": [
+          "insurance",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "937bc38d-f58a-48f7-9ced-4d5c0eb38fd1",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.408894+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "b1a08e34-777e-41c9-b0c3-730d4c0d6052",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Lots of places can expose you to identity theft. Oh no. That's why LifeLock monitors hundreds of millions of data points a second for threats to your identity, which is way more than anyone can do on their own. If we find anything suspicious, like new loans or changes to your financial accounts, we alert you right away, all through text, phone, email, or the LifeLock app. Get the alerts that could make all the difference. Save up to 30% your first year at LifeLock.com slash podcast. Terms apply.",
+        "intro_variants": [
+          "Lots of places can expose you to identity theft."
+        ],
+        "outro_variants": [
+          "Save up to 30% your first year at LifeLock.com slash podcast. Terms apply."
+        ],
+        "avg_duration": 28.9,
+        "sponsor": "LifeLock",
+        "sponsor_aliases": [
+          "Life Lock",
+          "LifeLock.com"
+        ],
+        "sponsor_tags": [
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "b1a08e34-777e-41c9-b0c3-730d4c0d6052",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.432871+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "331283ae-f184-4146-850c-5eb52931503f",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Support for the show comes from ShipStation. When you're busy running a company, it's easy to miss those spots you might be overspending, especially when it comes to shipping. That's where ShipStation comes in after all. ShipStation is an end-to-end order fulfillment platform for e-commerce businesses built to handle your entire shipping workflow so your team can focus on growth. With ShipStation everything from order management to inventory and returns is centralized in one platform And with automated rate shipping you can compare rates across all your faves with savings up to 90% off The sooner you switch the sooner you can start saving time and money You can get started with ShipStation today and get 60 days free at ShipStation with code today That ShipStation code today ShipStation code today Taxes and fees apply",
+        "intro_variants": [
+          "Support for the show comes from ShipStation.",
+          "When you're busy running a company, it's easy to miss those spots you might be overspending, especially when it comes to shipping."
+        ],
+        "outro_variants": [
+          "That ShipStation code today ShipStation code today Taxes and fees apply",
+          "That's ShipStation.com code today. ShipStation.com code today."
+        ],
+        "avg_duration": 65.6,
+        "sponsor": "ShipStation",
+        "sponsor_aliases": [
+          "Ship Station",
+          "ShipStation.com"
+        ],
+        "sponsor_tags": [
+          "business",
+          "saas",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "331283ae-f184-4146-850c-5eb52931503f",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.443793+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "d7496425-afb9-4ca2-8b10-d45080302100",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Megan Rapinoe here. This week is our last regular episode of A Touch More before I kick off a limited series, A Touch More, The Beautiful Game, a special series for the World Cup featuring in-depth interviews with some of soccer's biggest stars. But for this week, we are closing out the Arrow with a special compilation episode featuring our absolute favorite moments and themes from our last 90 episodes of A Touch More. Check out the latest episode of A Touch More wherever you get your podcasts.",
+        "intro_variants": [],
+        "outro_variants": [
+          "Check out the latest episode of A Touch More wherever you get your podcasts."
+        ],
+        "avg_duration": 28.0,
+        "sponsor": "A Touch More",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "sports",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "d7496425-afb9-4ca2-8b10-d45080302100",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.482323+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "8e7caa26-fe39-4c15-bfbe-b8431cb118fb",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Living with a rare autoimmune condition brings uncertainty, but it can also create community. In Season 6 of Untold Stories, Life with a Severe Autoimmune Condition, they go beyond MG and CIDP, as host Martine Hackett welcomes stories from other conditions like myositis and IgAN into the conversation. Untold Stories is produced by Ruby Studio in partnership with Argenix. Listen to Untold Stories life with a Severe Autoimmune Condition on the app or wherever you get your podcasts.",
+        "intro_variants": [
+          "Living with a rare autoimmune condition brings uncertainty, but it can also create community."
+        ],
+        "outro_variants": [
+          "Untold Stories is produced by Ruby Studio in partnership with Argenix.",
+          "Listen to Untold Stories life with a Severe Autoimmune Condition on the app or wherever you get your podcasts."
+        ],
+        "avg_duration": null,
+        "sponsor": "Untold Stories",
+        "sponsor_aliases": [],
+        "sponsor_tags": [],
+        "source_language": null,
+        "community_id": "8e7caa26-fe39-4c15-bfbe-b8431cb118fb",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.489769+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "feb1928f-6b38-4c2f-ab2e-c6eb369193ce",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Unlike the people we normally talk about on the show, we are living in a time when internet connectivity is a standard part of life for most people. And there is literally no way we could research and prepare our podcast without the internet. If connectivity goes down for me, it can be really hard to make up that lost time. And for businesses, internet connectivity is even more of a necessity. Spectrum Business keeps businesses of all sizes connected seamlessly with fast and reliable internet, advanced Wi-Fi, phone, TV, and mobile services. Spectrum Business offers 100% U.S.-based customer support, and they do it 24-7. That means you can always stay up and running, no matter what hours your business keeps. Sspectrum Business also will tailor connectivity solutions just for you. They will put a package together that is built for your business budget. Millions of business owners rely on Spectrum Business to keep them connected. So visit Spectrum.com slash business to learn more. Restrictions apply. Service is not available in all areas.",
+        "intro_variants": [
+          "Unlike the people we normally talk about on the show, we are living in a time when internet connectivity is a standard part of life for most people."
+        ],
+        "outro_variants": [
+          "So visit Spectrum.com slash business to learn more. Restrictions apply. Service is not available in all areas."
+        ],
+        "avg_duration": 119.4,
+        "sponsor": "Spectrum Business",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "business",
+          "telecom",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "feb1928f-6b38-4c2f-ab2e-c6eb369193ce",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.503041+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "bce3db72-4300-4ea1-aca7-2637457bb9d6",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "She's been thinking about this sleepover all week, but I think about her food allergies all the time. Fortunately, her doctor prescribed Zolaire, omalizumab. It's proven to significantly reduce allergic reactions if a food allergy accident happens. Zolaire 150mg is a prescription medication used to treat food allergy in people one year of age and older to reduce allergic reactions due to accidental exposure to one or more foods While taking Zolaire you should continue to avoid all foods to which you are allergic Don use if you are allergic to Zolaire Zolaire may cause a severe life allergic reaction called anaphylaxis Tell your doctor if you ever had anaphylaxis Get help right away if you have trouble breathing or if you have swelling of your throat or tongue Zolaire should not be used for the emergency treatment of allergic reactions including anaphylaxis Zolaire is for maintenance use to reduce allergic reactions including anaphylaxis while avoiding food allergens Serious side effects such as cancer fever muscle aches and rash parasitic infection or heart and circulation problems and the problems have been reported. Please see Zolaire.com for full prescribing information. Ask an allergist about Zolaire. This is an advertisement for Zolaire paid for by Genentech and Novartis.",
+        "intro_variants": [
+          "She's been thinking about this sleepover all week, but I think about her food allergies all the time. Fortunately, her doctor prescribed Zolaire, omalizumab."
+        ],
+        "outro_variants": [
+          "This is an advertisement for Zolaire paid for by Genentech and Novartis."
+        ],
+        "avg_duration": 103.7,
+        "sponsor": "Zolaire",
+        "sponsor_aliases": [
+          "zolaire.com",
+          "omalizumab",
+          "Genentech",
+          "Novartis"
+        ],
+        "sponsor_tags": [
+          "health",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "bce3db72-4300-4ea1-aca7-2637457bb9d6",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.563804+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "ea433178-fcd6-491f-a835-ba1bee7fad87",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "What if your next favorite hobby came with a built-in crew? That's Cornhole. Whether you're brand new to the game or just looking for an excuse to get outside, there's a whole world of players out there ready to welcome you in. Local leagues, weekend tournaments, backyard throwdowns, it's all happening near you. Find your people at your next event at iplaycornhole.com slash events. New hobby, new friends. Same you, just having a lot more fun. or to name a few.",
+        "intro_variants": [
+          "What if your next favorite hobby came with a built-in crew? That's Cornhole."
+        ],
+        "outro_variants": [
+          "Find your people at your next event at iplaycornhole.com slash events. New hobby, new friends. Same you, just having a lot more fun. or to name a few."
+        ],
+        "avg_duration": 101.2,
+        "sponsor": "iplaycornhole.com",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "sports",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "ea433178-fcd6-491f-a835-ba1bee7fad87",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.581236+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "44f0b2d1-9eb7-40bf-a694-f67eb0a9631b",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "Pain is different for everyone. But where pain starts, Journavx Suzetrogene begins. Journavx is a non-opioid 50 milligram prescription tablet for adults with moderate to severe acute pain that reduces pain signals before they reach the brain. Before those signals tell the brain to feel like I punched an angry beehive and pain reduction can finally begin. Do not take Journavx with CYP3A inhibitors. Avoid use with grapefruit or liver problems as these may increase side effects. Tell your doctor about all your medicines. If you are pregnant or breastfeeding, you can't be a doctor. Speeding. Journavx may make certain medicines and birth control less effective. Side effects include itching, muscle spasms, rash, and elevated muscle enzymes. To learn more about Journavx, ask your doctor, call 1-833-589-PAIN or visit journavx.com.",
+        "intro_variants": [
+          "Pain is different for everyone. But where pain starts, Journavx Suzetrogene begins."
+        ],
+        "outro_variants": [
+          "To learn more about Journavx, ask your doctor, call 1-833-589-PAIN or visit journavx.com."
+        ],
+        "avg_duration": null,
+        "sponsor": "Journavx",
+        "sponsor_aliases": [
+          "Girnavix",
+          "Gernavix",
+          "Suzetrogene"
+        ],
+        "sponsor_tags": [
+          "health",
+          "universal"
+        ],
+        "source_language": null,
+        "community_id": "44f0b2d1-9eb7-40bf-a694-f67eb0a9631b",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.600117+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "8203379c-7cea-416c-bcb8-3c9d654b4df0",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "We're always talking about how things work, and one thing that keeps your car running smoothly is regular oil changes. But life's busy, and the oil light always comes on at the worst time. Well, that's why there's Take 5 Oil Change. It doesn't just save time, it gives you control of your day back. You pull in, stay in your car, check something off your to-do list. No waiting room, no pressure. You're in and you're out in about 10 minutes. Oil changes include tire pressure checks and fluid top-offs, and the friendly staff explain everything and welcome you with a free water. Take 5 fitting into your busy schedule is something you should know. Find your nearest shop at Take5.com.",
+        "intro_variants": [
+          "We're always talking about how things work, and one thing that keeps your car running smoothly is regular oil changes."
+        ],
+        "outro_variants": [
+          "Find your nearest shop at Take5.com."
+        ],
+        "avg_duration": 104.9,
+        "sponsor": "Take5",
+        "sponsor_aliases": [
+          "Take 5 Oil Change"
+        ],
+        "sponsor_tags": [
+          "automotive"
+        ],
+        "source_language": null,
+        "community_id": "8203379c-7cea-416c-bcb8-3c9d654b4df0",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.627836+00:00",
+        "submitted_app_version": "2.7.5",
+        "sponsor_match": "exact"
+      }
+    },
+    {
+      "community_id": "f2f5c26c-9111-4b6d-85f8-afc96e57080c",
+      "version": 1,
+      "data": {
+        "scope": "global",
+        "text_template": "You ever been to the pharmacy counter and the pharmacist asks, Do you have any questions? And suddenly your mind goes blank? Well, that's exactly why you need to listen to Beyond the Script. That's right. It's hosted by Dr. Jake Goodman, and this podcast brings you real conversations with pharmacists, the health experts you see most, answering the questions you wish you'd asked, like which medications may not mix well, what vaccines you should consider before a big trip, and even those questions that you were too embarrassed to say out loud. Each episode busts myths, decodes health trends, and gives you practical, trustworthy advice straight from the people behind the counter. No white coats, no lectures, just real talk, real answers, and maybe a few laughs.",
+        "intro_variants": [
+          "You ever been to the pharmacy counter and the pharmacist asks, Do you have any questions?"
+        ],
+        "outro_variants": [
+          "No white coats, no lectures, just real talk, real answers, and maybe a few laughs."
+        ],
+        "avg_duration": 116.8,
+        "sponsor": "Beyond the Script",
+        "sponsor_aliases": [],
+        "sponsor_tags": [
+          "health"
+        ],
+        "source_language": null,
+        "community_id": "f2f5c26c-9111-4b6d-85f8-afc96e57080c",
+        "version": 1,
+        "submitted_at": "2026-06-06T23:42:17.637415+00:00",
+        "submitted_app_version": "2.7.5",
         "sponsor_match": "exact"
       }
     }

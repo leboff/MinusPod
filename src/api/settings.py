@@ -2,7 +2,6 @@
 import json
 import logging
 import os
-import re
 import threading
 import uuid
 from dataclasses import dataclass
@@ -17,15 +16,25 @@ from api import (
 from config import (
     WHISPER_BACKEND_LOCAL, WHISPER_BACKEND_API,
     WHISPER_COMPUTE_TYPES, WHISPER_COMPUTE_TYPE_DEFAULT,
-    OPENROUTER_BASE_URL,
+    DEFAULT_OPENAI_BASE_URL, OPENROUTER_BASE_URL, OPENROUTER_ROUTER_ALIASES,
     PROVIDER_ANTHROPIC, PROVIDER_OPENROUTER, PROVIDER_OPENAI_COMPATIBLE, PROVIDER_OLLAMA,
-    ALLOWED_AUDIO_BITRATES, env_backed_default,
+    resolve_env_backed_default,
+    ALLOWED_AUDIO_BITRATES, DEFAULT_AUDIO_BITRATE,
+    AD_DETECTION_PARALLEL_WINDOWS_DEFAULT,
+    AD_DETECTION_PARALLEL_WINDOWS_MIN,
+    AD_DETECTION_PARALLEL_WINDOWS_MAX,
+    AD_REVIEWER_PARALLEL_ADS_DEFAULT,
+    AD_REVIEWER_PARALLEL_ADS_MIN,
+    AD_REVIEWER_PARALLEL_ADS_MAX,
+    coerce_bool_setting,
+    STAGE_TUNABLE_PAYLOAD_KEYS,
 )
 from pricing_fetcher import force_refresh_pricing
 from llm_client import (
     get_effective_provider, get_effective_base_url, get_api_key, get_effective_openrouter_api_key,
     get_llm_client, create_client_for_provider, _JSON_FORMAT_SETTING_KEY,
 )
+from utils.language import LANGUAGE_CODE_RE
 from utils.url import validate_base_url, SSRFError
 from utils.http import safe_url_for_log
 from utils.secret_writes import SecretWriteRejected, set_or_clear_secret
@@ -102,6 +111,10 @@ def get_settings():
     )
     from ad_detector import AdDetector
     from config import DEFAULT_AD_DETECTION_MODEL as DEFAULT_MODEL
+    from config import (
+        AUDIO_CUE_FREQ_MIN_HZ, AUDIO_CUE_FREQ_MAX_HZ,
+        AUDIO_CUE_PROMINENCE_DB, AUDIO_CUE_MIN_CONFIDENCE,
+    )
     from chapters_generator import CHAPTERS_MODEL
     settings = _settings_view(db.get_all_settings())
 
@@ -118,8 +131,8 @@ def get_settings():
     verification_model = _setting_value(settings, 'verification_model', DEFAULT_MODEL)
     chapters_model = _setting_value(settings, 'chapters_model', CHAPTERS_MODEL)
 
-    # Get whisper model setting (env-backed; see config.ENV_BACKED_SETTINGS)
-    default_whisper_model = env_backed_default('whisper_model')
+    # Get whisper model setting (defaults to env var or 'small')
+    default_whisper_model = os.environ.get('WHISPER_MODEL', 'small')
     whisper_model = _setting_value(settings, 'whisper_model', default_whisper_model)
 
     # Get boolean settings
@@ -159,8 +172,7 @@ def get_settings():
     default_whisper_backend = os.environ.get('WHISPER_BACKEND', 'local')
     default_whisper_api_base_url = os.environ.get('WHISPER_API_BASE_URL', '')
     default_whisper_api_model = os.environ.get('WHISPER_API_MODEL', 'whisper-1')
-    default_whisper_api_skip_flac = os.environ.get('WHISPER_API_SKIP_FLAC', 'false').lower() in ('true', '1', 'yes')
-    default_whisper_language = env_backed_default('whisper_language')
+    default_whisper_language = os.environ.get('WHISPER_LANGUAGE') or 'en'
     default_whisper_compute_type = os.environ.get('WHISPER_COMPUTE_TYPE', WHISPER_COMPUTE_TYPE_DEFAULT)
     default_vad_gap_enabled = os.environ.get('VAD_GAP_DETECTION_ENABLED', 'true').lower() in ('true', '1', 'yes')
 
@@ -177,10 +189,6 @@ def get_settings():
     whisper_api_base_url = _setting_value(settings, 'whisper_api_base_url', default_whisper_api_base_url)
     whisper_api_key = _setting_value(settings, 'whisper_api_key', '')
     whisper_api_model = _setting_value(settings, 'whisper_api_model', default_whisper_api_model)
-    whisper_api_skip_flac_raw = _setting_value(
-        settings, 'whisper_api_skip_flac', str(default_whisper_api_skip_flac).lower()
-    )
-    whisper_api_skip_flac = str(whisper_api_skip_flac_raw).lower() in ('true', '1', 'yes')
     whisper_language = _setting_value(settings, 'whisper_language', default_whisper_language)
     whisper_compute_type = _setting_value(settings, 'whisper_compute_type', default_whisper_compute_type)
     vad_gap_enabled_raw = _setting_value(settings, 'vad_gap_detection_enabled', str(default_vad_gap_enabled).lower())
@@ -196,9 +204,36 @@ def get_settings():
     vad_gap_mid = _db_float('vad_gap_mid_min_seconds', default_vad_gap_mid)
     vad_gap_tail = _db_float('vad_gap_tail_min_seconds', default_vad_gap_tail)
 
-    # Audio output bitrate (env-backed; see config.ENV_BACKED_SETTINGS)
-    audio_bitrate = _setting_value(
-        settings, 'audio_bitrate', env_backed_default('audio_bitrate'))
+    audio_bitrate = _setting_value(settings, 'audio_bitrate', DEFAULT_AUDIO_BITRATE)
+    default_skip_flac = os.environ.get('SKIP_FLAC_COMPRESSION', 'false')
+    skip_flac_raw = _setting_value(settings, 'skip_flac_compression', default_skip_flac)
+    skip_flac = coerce_bool_setting(skip_flac_raw)
+
+    default_parallel_windows = str(AD_DETECTION_PARALLEL_WINDOWS_DEFAULT)
+    parallel_windows_raw = _setting_value(
+        settings, 'ad_detection_parallel_windows', default_parallel_windows
+    )
+    try:
+        parallel_windows = int(parallel_windows_raw)
+    except (ValueError, TypeError):
+        parallel_windows = AD_DETECTION_PARALLEL_WINDOWS_DEFAULT
+    parallel_windows = max(
+        AD_DETECTION_PARALLEL_WINDOWS_MIN,
+        min(AD_DETECTION_PARALLEL_WINDOWS_MAX, parallel_windows),
+    )
+
+    default_reviewer_parallel = str(AD_REVIEWER_PARALLEL_ADS_DEFAULT)
+    reviewer_parallel_raw = _setting_value(
+        settings, 'ad_reviewer_parallel_ads', default_reviewer_parallel
+    )
+    try:
+        reviewer_parallel = int(reviewer_parallel_raw)
+    except (ValueError, TypeError):
+        reviewer_parallel = AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    reviewer_parallel = max(
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        min(AD_REVIEWER_PARALLEL_ADS_MAX, reviewer_parallel),
+    )
 
     # Per-stage LLM tunables: resolved value (env > DB > default) and env-override status.
     from config import (
@@ -248,12 +283,35 @@ def get_settings():
         review_max_boundary_shift = int(_setting_value(settings, 'review_max_boundary_shift', '60'))
     except (ValueError, TypeError):
         review_max_boundary_shift = 60
-    review_prompt = _setting_value(settings, 'review_prompt', DEFAULT_REVIEW_PROMPT)
-    resurrect_prompt = _setting_value(settings, 'resurrect_prompt', DEFAULT_RESURRECT_PROMPT)
+    # `or DEFAULT` (not just the _setting_value fallback) so a stored empty/whitespace
+    # row also yields the default text -- _setting_value only covers a missing row, so a
+    # blank one would render an unrecoverable empty textarea. All four prompts share this
+    # contract, hence the same coalesce on system/verification below.
+    review_prompt = _setting_value(settings, 'review_prompt', DEFAULT_REVIEW_PROMPT) or DEFAULT_REVIEW_PROMPT
+    resurrect_prompt = _setting_value(settings, 'resurrect_prompt', DEFAULT_RESURRECT_PROMPT) or DEFAULT_RESURRECT_PROMPT
+
+    # Audio cue detection experiment (#350)
+    audio_cue_enabled = str(
+        _setting_value(settings, 'audio_cue_detection_enabled', 'false')).strip().lower() == 'true'
+
+    # Learned positional prior experiment (#360)
+    positional_prior_enabled = coerce_bool_setting(
+        _setting_value(settings, 'positional_prior_enabled', 'false'))
+
+    def _cue_num(key, default):
+        try:
+            return float(_setting_value(settings, key, str(default)))
+        except (ValueError, TypeError):
+            return float(default)
+
+    audio_cue_freq_min = int(_cue_num('audio_cue_freq_min_hz', AUDIO_CUE_FREQ_MIN_HZ))
+    audio_cue_freq_max = int(_cue_num('audio_cue_freq_max_hz', AUDIO_CUE_FREQ_MAX_HZ))
+    audio_cue_prominence = _cue_num('audio_cue_prominence_db', AUDIO_CUE_PROMINENCE_DB)
+    audio_cue_min_conf = _cue_num('audio_cue_min_confidence', AUDIO_CUE_MIN_CONFIDENCE)
 
     return json_response({
-        'systemPrompt': _sv('system_prompt', _setting_value(settings, 'system_prompt', DEFAULT_SYSTEM_PROMPT)),
-        'verificationPrompt': _sv('verification_prompt', _setting_value(settings, 'verification_prompt', DEFAULT_VERIFICATION_PROMPT)),
+        'systemPrompt': _sv('system_prompt', _setting_value(settings, 'system_prompt', DEFAULT_SYSTEM_PROMPT) or DEFAULT_SYSTEM_PROMPT),
+        'verificationPrompt': _sv('verification_prompt', _setting_value(settings, 'verification_prompt', DEFAULT_VERIFICATION_PROMPT) or DEFAULT_VERIFICATION_PROMPT),
         'enableAdReview': _sv('enable_ad_review', enable_ad_review),
         'reviewModel': _sv('review_model', review_model),
         'reviewMaxBoundaryShift': _sv('review_max_boundary_shift', review_max_boundary_shift),
@@ -279,14 +337,22 @@ def get_settings():
         'whisperApiBaseUrl': _sv('whisper_api_base_url', whisper_api_base_url),
         'whisperApiKeyConfigured': bool(whisper_api_key),
         'whisperApiModel': _sv('whisper_api_model', whisper_api_model),
-        'whisperApiSkipFlac': _sv('whisper_api_skip_flac', whisper_api_skip_flac),
         'whisperLanguage': _sv('whisper_language', whisper_language),
         'whisperComputeType': _sv('whisper_compute_type', whisper_compute_type),
         'vadGapDetectionEnabled': _sv('vad_gap_detection_enabled', vad_gap_enabled),
         'vadGapStartMinSeconds': _sv('vad_gap_start_min_seconds', vad_gap_start),
         'vadGapMidMinSeconds': _sv('vad_gap_mid_min_seconds', vad_gap_mid),
         'vadGapTailMinSeconds': _sv('vad_gap_tail_min_seconds', vad_gap_tail),
+        'audioCueDetectionEnabled': _sv('audio_cue_detection_enabled', audio_cue_enabled),
+        'audioCueFreqMinHz': _sv('audio_cue_freq_min_hz', audio_cue_freq_min),
+        'audioCueFreqMaxHz': _sv('audio_cue_freq_max_hz', audio_cue_freq_max),
+        'audioCueProminenceDb': _sv('audio_cue_prominence_db', audio_cue_prominence),
+        'audioCueMinConfidence': _sv('audio_cue_min_confidence', audio_cue_min_conf),
+        'positionalPriorEnabled': _sv('positional_prior_enabled', positional_prior_enabled),
         'audioBitrate': _sv('audio_bitrate', audio_bitrate),
+        'skipFlacCompression': _sv('skip_flac_compression', skip_flac),
+        'adDetectionParallelWindows': _sv('ad_detection_parallel_windows', parallel_windows),
+        'adReviewerParallelAds': _sv('ad_reviewer_parallel_ads', reviewer_parallel),
         'apiKeyConfigured': api_key_configured,
         'retentionDays': int(db.get_setting('retention_days') or '30'),
         'stageTunables': tunables_payload,
@@ -312,20 +378,28 @@ def get_settings():
             'chaptersEnabled': True,
             'chaptersModel': CHAPTERS_MODEL,
             'minCutConfidence': 0.80,
-            'llmProvider': env_backed_default('llm_provider'),
-            'openaiBaseUrl': env_backed_default('openai_base_url'),
+            'llmProvider': resolve_env_backed_default('llm_provider'),
+            'openaiBaseUrl': os.environ.get('OPENAI_BASE_URL', DEFAULT_OPENAI_BASE_URL),
             'openrouterBaseUrl': OPENROUTER_BASE_URL,
             'whisperBackend': default_whisper_backend,
             'whisperApiBaseUrl': default_whisper_api_base_url,
             'whisperApiModel': default_whisper_api_model,
-            'whisperApiSkipFlac': default_whisper_api_skip_flac,
             'whisperLanguage': default_whisper_language,
             'whisperComputeType': default_whisper_compute_type,
             'vadGapDetectionEnabled': default_vad_gap_enabled,
             'vadGapStartMinSeconds': default_vad_gap_start,
             'vadGapMidMinSeconds': default_vad_gap_mid,
             'vadGapTailMinSeconds': default_vad_gap_tail,
-            'audioBitrate': env_backed_default('audio_bitrate'),
+            'audioCueDetectionEnabled': False,
+            'positionalPriorEnabled': False,
+            'audioCueFreqMinHz': int(AUDIO_CUE_FREQ_MIN_HZ),
+            'audioCueFreqMaxHz': int(AUDIO_CUE_FREQ_MAX_HZ),
+            'audioCueProminenceDb': AUDIO_CUE_PROMINENCE_DB,
+            'audioCueMinConfidence': AUDIO_CUE_MIN_CONFIDENCE,
+            'audioBitrate': DEFAULT_AUDIO_BITRATE,
+            'skipFlacCompression': coerce_bool_setting(os.environ.get('SKIP_FLAC_COMPRESSION', 'false')),
+            'adDetectionParallelWindows': AD_DETECTION_PARALLEL_WINDOWS_DEFAULT,
+            'adReviewerParallelAds': AD_REVIEWER_PARALLEL_ADS_DEFAULT,
         }
     })
 
@@ -357,6 +431,8 @@ def update_ad_detection_settings():
         _apply_provider_fields,
         _apply_whisper_fields,
         _apply_vad_gap_fields,
+        _apply_audio_cue_fields,
+        _apply_positional_prior_fields,
         _apply_podcast_index_fields,
         _apply_stage_tunables,
     )
@@ -369,7 +445,12 @@ def update_ad_detection_settings():
 
 
 def _apply_prompt_fields(db, data):
-    """Persist the four prompt strings (no coercion, no validation)."""
+    """Persist the four prompt strings.
+
+    An empty/whitespace prompt is never valid (the runtime falls back to the
+    default), so clearing a field and saving resets it to default rather than
+    storing a blank row that would render as an unrecoverable empty textarea.
+    """
     for payload_key, db_key, log_label in (
         ('systemPrompt', 'system_prompt', 'system prompt'),
         ('verificationPrompt', 'verification_prompt', 'verification prompt'),
@@ -377,8 +458,12 @@ def _apply_prompt_fields(db, data):
         ('resurrectPrompt', 'resurrect_prompt', 'resurrect prompt'),
     ):
         if payload_key in data:
-            db.set_setting(db_key, data[payload_key], is_default=False)
-            logger.info(f"Updated {log_label}")
+            if not str(data[payload_key] or '').strip():
+                db.reset_setting(db_key)
+                logger.info(f"Reset {log_label} to default (blank submitted)")
+            else:
+                db.set_setting(db_key, data[payload_key], is_default=False)
+                logger.info(f"Updated {log_label}")
     return None
 
 
@@ -483,6 +568,48 @@ def _apply_audio_fields(db, data):
             )
         db.set_setting('audio_bitrate', val, is_default=False)
         logger.info(f"Updated audio bitrate to: {val}")
+
+    if 'adDetectionParallelWindows' in data:
+        try:
+            n = int(data['adDetectionParallelWindows'])
+        except (ValueError, TypeError):
+            return json_response(
+                {'error': 'adDetectionParallelWindows must be an integer'}, 400
+            )
+        if not (AD_DETECTION_PARALLEL_WINDOWS_MIN <= n <= AD_DETECTION_PARALLEL_WINDOWS_MAX):
+            return json_response(
+                {
+                    'error': (
+                        f'adDetectionParallelWindows must be between '
+                        f'{AD_DETECTION_PARALLEL_WINDOWS_MIN} and '
+                        f'{AD_DETECTION_PARALLEL_WINDOWS_MAX}'
+                    )
+                },
+                400,
+            )
+        db.set_setting('ad_detection_parallel_windows', str(n), is_default=False)
+        logger.info(f"Updated ad_detection_parallel_windows to: {n}")
+
+    if 'adReviewerParallelAds' in data:
+        try:
+            n = int(data['adReviewerParallelAds'])
+        except (ValueError, TypeError):
+            return json_response(
+                {'error': 'adReviewerParallelAds must be an integer'}, 400
+            )
+        if not (AD_REVIEWER_PARALLEL_ADS_MIN <= n <= AD_REVIEWER_PARALLEL_ADS_MAX):
+            return json_response(
+                {
+                    'error': (
+                        f'adReviewerParallelAds must be between '
+                        f'{AD_REVIEWER_PARALLEL_ADS_MIN} and '
+                        f'{AD_REVIEWER_PARALLEL_ADS_MAX}'
+                    )
+                },
+                400,
+            )
+        db.set_setting('ad_reviewer_parallel_ads', str(n), is_default=False)
+        logger.info(f"Updated ad_reviewer_parallel_ads to: {n}")
     return None
 
 
@@ -611,21 +738,12 @@ def _apply_whisper_fields(db, data):
         db.set_setting('whisper_api_model', model_val, is_default=False)
         logger.info(f"Updated whisper API model to: {model_val}")
 
-    if 'whisperApiSkipFlac' in data:
-        raw = data['whisperApiSkipFlac']
-        if isinstance(raw, bool):
-            skip_flac = raw
-        else:
-            skip_flac = str(raw).strip().lower() in ('true', '1', 'yes')
-        db.set_setting('whisper_api_skip_flac', 'true' if skip_flac else 'false', is_default=False)
-        logger.info(f"Updated whisper API skip FLAC to: {skip_flac}")
-
     if 'whisperLanguage' in data:
         lang_val = str(data['whisperLanguage']).strip().lower()
         # Empty string collapses to default ('en'); 'auto' is allowed; otherwise
-        # require a plausible ISO-639-1 code shape (2-5 alphanum/hyphen chars).
-        if lang_val and lang_val != 'auto' and not re.match(r'^[a-z]{2,3}(-[a-z0-9]{2,4})?$', lang_val):
-            return json_response({'error': "whisperLanguage must be 'auto' or a valid language code (e.g. 'en', 'fi', 'pt-br')"}, 400)
+        # require a bare 2-3 letter language code (faster-whisper rejects subtags).
+        if lang_val and lang_val != 'auto' and not LANGUAGE_CODE_RE.match(lang_val):
+            return json_response({'error': "whisperLanguage must be 'auto' or a 2-3 letter language code (e.g. 'en', 'fi', 'pt')"}, 400)
         db.set_setting('whisper_language', lang_val or 'en', is_default=False)
         logger.info(f"Updated whisper language to: {lang_val or 'en'}")
 
@@ -643,6 +761,11 @@ def _apply_whisper_fields(db, data):
         except Exception:
             logger.exception("Failed to mark Whisper model for reload after compute_type change")
         logger.info(f"Updated whisper compute type to: {ct_val}")
+
+    if 'skipFlacCompression' in data:
+        enabled = coerce_bool_setting(data['skipFlacCompression'])
+        db.set_setting('skip_flac_compression', 'true' if enabled else 'false', is_default=False)
+        logger.info(f"Updated skip_flac_compression to: {enabled}")
     return None
 
 
@@ -672,6 +795,64 @@ def _apply_vad_gap_fields(db, data):
             return json_response({'error': f'{field_name} must be a positive number'}, 400)
         db.set_setting(db_key, str(value), is_default=False)
         logger.info(f"Updated {db_key} to: {value}")
+    return None
+
+
+def _apply_audio_cue_fields(db, data):
+    """Persist the audio-cue detection experiment (#350): toggle + tuneables.
+
+    Validates every field (ranges and freq min < max) BEFORE writing anything,
+    so an invalid field cannot leave a half-applied set.
+    """
+    from config import AUDIO_CUE_FREQ_MIN_HZ, AUDIO_CUE_FREQ_MAX_HZ
+
+    writes = []  # (db_key, str_value) applied only after all validation passes
+
+    if 'audioCueDetectionEnabled' in data:
+        raw = data['audioCueDetectionEnabled']
+        enabled = raw if isinstance(raw, bool) else str(raw).strip().lower() in ('true', '1', 'yes')
+        writes.append(('audio_cue_detection_enabled', 'true' if enabled else 'false'))
+
+    parsed = {}
+    for field_name, db_key, lo, hi in (
+        ('audioCueFreqMinHz', 'audio_cue_freq_min_hz', 20.0, 20000.0),
+        ('audioCueFreqMaxHz', 'audio_cue_freq_max_hz', 20.0, 20000.0),
+        ('audioCueProminenceDb', 'audio_cue_prominence_db', 1.0, 40.0),
+        ('audioCueMinConfidence', 'audio_cue_min_confidence', 0.0, 1.0),
+    ):
+        if field_name not in data:
+            continue
+        try:
+            value = float(data[field_name])
+        except (TypeError, ValueError):
+            return json_response({'error': f'{field_name} must be a number'}, 400)
+        if value < lo or value > hi:
+            return json_response({'error': f'{field_name} must be between {lo} and {hi}'}, 400)
+        parsed[field_name] = value
+        writes.append((db_key, str(value)))
+
+    if 'audioCueFreqMinHz' in parsed or 'audioCueFreqMaxHz' in parsed:
+        fmin = parsed.get('audioCueFreqMinHz')
+        if fmin is None:
+            fmin = float(db.get_setting('audio_cue_freq_min_hz') or AUDIO_CUE_FREQ_MIN_HZ)
+        fmax = parsed.get('audioCueFreqMaxHz')
+        if fmax is None:
+            fmax = float(db.get_setting('audio_cue_freq_max_hz') or AUDIO_CUE_FREQ_MAX_HZ)
+        if fmin >= fmax:
+            return json_response({'error': 'audioCueFreqMinHz must be below audioCueFreqMaxHz'}, 400)
+
+    for db_key, str_value in writes:
+        db.set_setting(db_key, str_value, is_default=False)
+        logger.info(f"Updated {db_key} to: {str_value}")
+    return None
+
+
+def _apply_positional_prior_fields(db, data):
+    """Persist the learned positional prior experiment toggle (#360)."""
+    if 'positionalPriorEnabled' in data:
+        enabled = coerce_bool_setting(data['positionalPriorEnabled'])
+        db.set_setting('positional_prior_enabled', 'true' if enabled else 'false', is_default=False)
+        logger.info(f"Updated positional_prior_enabled to: {enabled}")
     return None
 
 
@@ -831,6 +1012,8 @@ def reset_ad_detection_settings():
     db.reset_setting('min_cut_confidence')
     db.reset_setting('auto_process_enabled')
     db.reset_setting('audio_bitrate')
+    db.reset_setting('ad_detection_parallel_windows')
+    db.reset_setting('ad_reviewer_parallel_ads')
 
     # Reset LLM provider settings back to env var defaults
     db.reset_setting('llm_provider')
@@ -843,12 +1026,18 @@ def reset_ad_detection_settings():
     db.reset_setting('whisper_api_base_url')
     db.reset_setting('whisper_api_key')
     db.reset_setting('whisper_api_model')
-    db.reset_setting('whisper_api_skip_flac')
     db.reset_setting('whisper_compute_type')
+    db.reset_setting('skip_flac_compression')
     db.reset_setting('vad_gap_detection_enabled')
     db.reset_setting('vad_gap_start_min_seconds')
     db.reset_setting('vad_gap_mid_min_seconds')
     db.reset_setting('vad_gap_tail_min_seconds')
+
+    # Per-stage LLM tunables (temperature, max tokens, reasoning, Ollama context
+    # window, detection-window geometry). reset_setting clears each row so
+    # env > default resolution applies.
+    for _payload_key, db_key, _kind in STAGE_TUNABLE_PAYLOAD_KEYS:
+        db.reset_setting(db_key)
 
     # Recreate LLM client with reset settings
     client = get_llm_client(force_new=True)
@@ -879,6 +1068,20 @@ def reset_prompts_only():
 
     logger.info("Reset prompts to defaults")
     return json_response({'message': 'Prompts reset to defaults'})
+
+
+def _ensure_openrouter_aliases_present(models: list) -> None:
+    """Prepend OpenRouter router aliases (openrouter/free, openrouter/auto) that
+    aren't already in the list. These are valid model IDs but are not returned by
+    /api/v1/models, so they'd otherwise never appear in the dropdown.
+    """
+    existing_ids = {m.get('id') for m in models}
+    missing = [
+        {'id': alias_id, 'name': alias_name, 'created': None}
+        for alias_id, alias_name in OPENROUTER_ROUTER_ALIASES
+        if alias_id not in existing_ids
+    ]
+    models[:0] = missing
 
 
 @api.route('/settings/models', methods=['GET'])
@@ -923,6 +1126,10 @@ def get_available_models():
         ad_detector = AdDetector()
         models = ad_detector.get_available_models()
 
+    target_provider = provider_override or get_effective_provider()
+    if target_provider == PROVIDER_OPENROUTER:
+        _ensure_openrouter_aliases_present(models)
+
     _enrich_models_with_pricing(models)
     return json_response({'models': models})
 
@@ -941,6 +1148,8 @@ def refresh_models():
     get_llm_client(force_new=True)
     ad_detector = AdDetector()
     models = ad_detector.get_available_models()
+    if get_effective_provider() == PROVIDER_OPENROUTER:
+        _ensure_openrouter_aliases_present(models)
     _enrich_models_with_pricing(models)
 
     logger.info(f"Refreshed model list: {len(models)} models available")
@@ -1392,12 +1601,28 @@ def test_webhook(webhook_id):
 @log_request
 def get_reviewer_settings():
     """Return the ad-reviewer auto-update settings."""
+    from config import (
+        AD_REVIEWER_PARALLEL_ADS_DEFAULT,
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        AD_REVIEWER_PARALLEL_ADS_MAX,
+    )
     db = get_database()
+    parallel_raw = db.get_setting('ad_reviewer_parallel_ads')
+    try:
+        parallel_ads = int(parallel_raw) if parallel_raw is not None else AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    except (TypeError, ValueError):
+        parallel_ads = AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    parallel_ads = max(
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        min(AD_REVIEWER_PARALLEL_ADS_MAX, parallel_ads),
+    )
     return json_response({
         'updatePatternsFromReviewerAdjustments': db.get_setting_bool(
             'update_patterns_from_reviewer_adjustments', default=True
         ),
         'minTrimThreshold': db.get_setting_float('min_trim_threshold', default=20.0),
+        'parallelAds': parallel_ads,
+        'parallelAdsDefault': AD_REVIEWER_PARALLEL_ADS_DEFAULT,
     })
 
 
@@ -1406,8 +1631,13 @@ def get_reviewer_settings():
 def update_reviewer_settings():
     """Update the ad-reviewer auto-update settings.
 
-    Body: {updatePatternsFromReviewerAdjustments: bool, minTrimThreshold: float}
+    Body: {updatePatternsFromReviewerAdjustments: bool, minTrimThreshold: float,
+           parallelAds: int}
     """
+    from config import (
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        AD_REVIEWER_PARALLEL_ADS_MAX,
+    )
     db = get_database()
     data = request.get_json() or {}
     if 'updatePatternsFromReviewerAdjustments' in data:
@@ -1421,6 +1651,18 @@ def update_reviewer_settings():
         if v <= 0 or v > 120:
             return error_response('minTrimThreshold must be between 1 and 120', 400)
         db.set_setting('min_trim_threshold', str(v))
+    if 'parallelAds' in data:
+        try:
+            n = int(data['parallelAds'])
+        except (TypeError, ValueError):
+            return error_response('parallelAds must be an integer', 400)
+        if not (AD_REVIEWER_PARALLEL_ADS_MIN <= n <= AD_REVIEWER_PARALLEL_ADS_MAX):
+            return error_response(
+                f'parallelAds must be between {AD_REVIEWER_PARALLEL_ADS_MIN} '
+                f'and {AD_REVIEWER_PARALLEL_ADS_MAX}',
+                400,
+            )
+        db.set_setting('ad_reviewer_parallel_ads', str(n), is_default=False)
     return get_reviewer_settings()
 
 

@@ -32,12 +32,16 @@ if str(_REPO_SRC) not in sys.path:
 from community_export import find_foreign_sponsors  # noqa: E402
 from utils.community_tags import (  # noqa: E402
     BUNDLE_FORMAT,
+    BUNDLE_NAME_PREFIX,
     CANONICAL_DAYS,
     CANONICAL_MONTHS,
     CANONICAL_RELATIVE_TIME,
     CANONICAL_STOPWORDS,
     DATE_REGEX,
+    DOMAIN_TLDS,
+    TRAILING_TRUNCATION_STOPWORDS,
     YEAR_REGEX,
+    expected_filename,
     iter_bundle_patterns,
     sponsor_seed,
     valid_tags,
@@ -126,6 +130,11 @@ def _schema_errors(doc: Dict[str, Any]) -> List[str]:
             int(doc['version'])
         except (TypeError, ValueError):
             errs.append('version must be an integer')
+    if doc.get('submitted_at') and not isinstance(doc['submitted_at'], str):
+        # A non-string submitted_at passes the truthiness check above but later
+        # crashes the manifest generator's sort (int vs str), DoS-ing manifest
+        # regeneration repo-wide (tools-cli-2).
+        errs.append('submitted_at must be a string')
     if doc.get('text_template') and not isinstance(doc['text_template'], str):
         errs.append('text_template must be a string')
     if doc.get('intro_variants') is not None and not isinstance(doc['intro_variants'], list):
@@ -162,6 +171,108 @@ def _quality_errors(doc: Dict[str, Any]) -> List[str]:
     if not any(c and re.search(rf'\b{re.escape(c)}\b', text_l) for c in candidates):
         errs.append('sponsor (or any alias) does not appear in text_template')
     return errs
+
+
+def _filename_errors(path: str, doc: Dict[str, Any]) -> List[str]:
+    """Reject when the on-disk filename does not equal slugify(sponsor)-<short>.json.
+
+    Caught the v2.5.x PR #292 footgun where a contributor hand-edited the
+    `sponsor` field but did not rename the file (or where the local DB had a
+    sponsor classification that disagreed with the ad text).
+
+    Skipped when `community_id` is empty -- the required-field check already
+    rejects that and a duplicate message would be noise.
+    """
+    actual = Path(path).name
+    community_id = doc.get('community_id') or ''
+    if not community_id:
+        return []
+    expected = expected_filename(doc.get('sponsor') or '', community_id)
+    if expected is None or actual == expected:
+        return []
+    return [
+        f'filename mismatch: file is named "{actual}" but sponsor '
+        f'"{doc.get("sponsor")}" + community_id "{community_id[:8]}..." '
+        f'requires "{expected}". Rename the file or fix the sponsor field.'
+    ]
+
+
+def _truncation_warnings(doc: Dict[str, Any]) -> List[str]:
+    """Warn when an intro/outro variant looks cut mid-clause.
+
+    Heuristic: strip trailing punctuation, split into tokens; flag the variant
+    if the last token is in a stopword set ("the", "at", "and", "com", "slash",
+    ...) or is a single non-"i" letter. Exception: a "dot <tld>" tail
+    (e.g. "shopify dot com") is treated as a completed URL and NOT flagged.
+    Variants are recall boosters, so a stray fragment never matches anything
+    and just clutters the pattern. Warning only -- the variant could still be
+    a legitimate anchor.
+    """
+    warnings: List[str] = []
+    for kind in ('intro_variants', 'outro_variants'):
+        for i, v in enumerate(doc.get(kind) or []):
+            if not isinstance(v, str):
+                continue
+            # Strip ASCII + curly quotes / ellipsis so Whisper output with
+            # smart quotes does not hide the real trailing token.
+            # Escape forms keep source ASCII-only per the repo lint rule.
+            stripped = v.rstrip(' .,;!?"\'\u2018\u2019\u201c\u201d\u2026')
+            if not stripped:
+                continue
+            tokens = stripped.split()
+            if not tokens:
+                continue
+            last = tokens[-1].lower()
+            prev = tokens[-2].lower() if len(tokens) >= 2 else ''
+            if prev == 'dot' and last in DOMAIN_TLDS:
+                continue
+            if last in TRAILING_TRUNCATION_STOPWORDS:
+                tail = ' '.join(tokens[-2:])
+                warnings.append(
+                    f'{kind}[{i}] looks truncated -- ends with "{tail}". '
+                    f'Trim, drop, or extend the variant.'
+                )
+                continue
+            if len(last) == 1 and last != 'i':
+                warnings.append(
+                    f'{kind}[{i}] looks truncated -- ends with single letter "{last}". '
+                    f'Trim, drop, or extend the variant.'
+                )
+    return warnings
+
+
+def _file_shape_warnings(path: str, raw: Dict[str, Any]) -> List[str]:
+    """Surface filename / payload-shape mismatches.
+
+    - Bundle payload in a `<slug>-<short>.json`-shaped file: probably a hand
+      split that forgot to flatten; the contained patterns will validate
+      individually but the directory convention is per-pattern files.
+    - Per-pattern payload in a `minuspod-submission-*.json`-shaped file: the
+      contributor dropped a bundle filename on a single pattern; the manifest
+      generator will still pick it up, but the directory convention should
+      hold.
+
+    Warnings, not rejections -- both shapes already parse correctly downstream.
+    """
+    if not isinstance(raw, dict):
+        return []
+    name = Path(path).name
+    is_bundle_payload = raw.get('format') == BUNDLE_FORMAT
+    is_bundle_name = name.startswith(BUNDLE_NAME_PREFIX)
+    if is_bundle_payload and not is_bundle_name:
+        return [
+            f'shape mismatch: "{name}" looks like a per-pattern filename '
+            f'but the payload is a bundle (format={BUNDLE_FORMAT}). '
+            f'Either rename it to "{BUNDLE_NAME_PREFIX}<id>.json" or use '
+            '`python -m src.tools.split_bundle` to land it as per-pattern files.'
+        ]
+    if not is_bundle_payload and is_bundle_name:
+        return [
+            f'shape mismatch: "{name}" looks like a bundle filename but the '
+            'payload is a per-pattern document. Rename to '
+            '`<slug>-<short_uuid>.json` (see patterns/CONTRIBUTING.md).'
+        ]
+    return []
 
 
 def _single_pattern_errors(doc: Dict[str, Any], seed: List[Dict[str, Any]]) -> List[str]:
@@ -239,6 +350,15 @@ def validate_doc(
         result.status = 'reject'
         return result
 
+    # Strip bundle entry suffix ("file.json#patterns[3]") so the filename
+    # check inspects the actual on-disk path. Bundle entries skip the
+    # check entirely -- bundles are validated as one file, not per-entry.
+    if '#patterns[' not in path:
+        fname_errs = _filename_errors(path, doc)
+        if fname_errs:
+            result.errors.extend(fname_errs)
+            result.status = 'reject'
+
     tag_errs = _tag_errors(doc)
     if tag_errs:
         result.errors.extend(tag_errs)
@@ -257,7 +377,8 @@ def validate_doc(
     result.sponsor_match = _classify_sponsor(doc.get('sponsor') or '', seed)
     if result.sponsor_match == 'unknown':
         result.warnings.append(
-            f'sponsor "{doc.get("sponsor")}" not in seed list (triage required)'
+            f'new sponsor "{doc.get("sponsor")}" -- not yet in seed list '
+            '(informational; community submissions can introduce new sponsors)'
         )
 
     if result.status == 'reject':
@@ -282,6 +403,10 @@ def validate_doc(
                 doc.get('text_template') or '',
                 matched.get('text_template') or '',
             )
+
+    trunc_warns = _truncation_warnings(doc)
+    if trunc_warns:
+        result.warnings.extend(trunc_warns)
 
     if result.warnings and result.status != 'reject':
         result.status = 'warn'
@@ -358,8 +483,9 @@ def render_markdown_comment(results: List[ValidationResult]) -> str:
     if warned:
         lines.append(f'### Warnings ({len(warned)})')
         lines.append(
-            f'Variant suggestions ({dedupe_link}) and unknown-sponsor flags '
-            f'({sponsor_link}) are advisory -- the maintainer decides during review.'
+            f'Variant suggestions ({dedupe_link}) are advisory -- the '
+            f'maintainer decides during review. New sponsors are expected '
+            f'and welcome; see {sponsor_link} if you want to canonicalize.'
         )
         lines.append('')
         for r in warned:
@@ -445,6 +571,12 @@ def run(pr_files: List[str], comment_output: Optional[str] = None,
                 errors=['empty submission: no patterns found in file'],
             ))
             continue
+        shape_warns = _file_shape_warnings(path, raw)
+        if shape_warns:
+            results.append(ValidationResult(
+                path=path, status='warn', sponsor='(file)',
+                warnings=list(shape_warns),
+            ))
         for sub_path, doc in extracted:
             results.append(validate_doc(sub_path, doc, seed, existing))
 

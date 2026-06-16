@@ -6,6 +6,17 @@ from typing import Optional, Dict, List
 logger = logging.getLogger(__name__)
 
 
+def _parse_bounds(raw: Optional[str]) -> Optional[Dict]:
+    """Parse a bounds JSON string to {'start': float, 'end': float}, or None."""
+    if not raw:
+        return None
+    try:
+        parsed = json.loads(raw)
+        return {'start': float(parsed['start']), 'end': float(parsed['end'])}
+    except (json.JSONDecodeError, KeyError, TypeError, ValueError):
+        return None
+
+
 class PatternMixin:
     """Ad pattern and correction management methods."""
 
@@ -145,7 +156,7 @@ class PatternMixin:
         row = cursor.fetchone()
         return dict(row) if row else None
 
-    def create_ad_pattern(self, scope: str, text_template: str = None,
+    def _create_ad_pattern_conn(self, conn, scope: str, text_template: str = None,
                           sponsor_id: int = None, podcast_id: str = None,
                           network_id: str = None, dai_platform: str = None,
                           intro_variants: List[str] = None,
@@ -159,8 +170,9 @@ class PatternMixin:
                           submitted_app_version: str = None,
                           protected_from_sync: int = 0,
                           source_language: str = None) -> int:
-        """Create a new ad pattern. Returns pattern ID."""
-        conn = self.get_connection()
+        """Insert an ad pattern on the caller's connection without committing.
+        Lets a multi-statement caller (e.g. replace-mode import) own the
+        transaction boundary so the whole batch is atomic. Returns pattern ID."""
         cursor = conn.execute(
             """INSERT INTO ad_patterns
                (scope, text_template, sponsor_id, podcast_id, network_id, dai_platform,
@@ -177,13 +189,15 @@ class PatternMixin:
              source, community_id, version, submitted_app_version, protected_from_sync,
              source_language)
         )
-        conn.commit()
         return cursor.lastrowid
 
-    def update_ad_pattern(self, pattern_id: int, **kwargs) -> bool:
-        """Update an ad pattern."""
-        conn = self.get_connection()
+    def create_ad_pattern(self, *args, **kwargs) -> int:
+        """Create a new ad pattern in its own transaction. Returns pattern ID."""
+        with self.transaction() as conn:
+            return self._create_ad_pattern_conn(conn, *args, **kwargs)
 
+    def _update_ad_pattern_conn(self, conn, pattern_id: int, **kwargs) -> bool:
+        """Update an ad pattern on the caller's connection without committing."""
         fields = []
         values = []
         for key, value in kwargs.items():
@@ -207,8 +221,12 @@ class PatternMixin:
             f"UPDATE ad_patterns SET {', '.join(fields)} WHERE id = ?",
             values
         )
-        conn.commit()
         return True
+
+    def update_ad_pattern(self, pattern_id: int, **kwargs) -> bool:
+        """Update an ad pattern in its own transaction."""
+        with self.transaction() as conn:
+            return self._update_ad_pattern_conn(conn, pattern_id, **kwargs)
 
     def find_pattern_by_community_id(self, community_id: str) -> Optional[Dict]:
         """Find a pattern by its community_id. Returns dict or None."""
@@ -241,18 +259,21 @@ class PatternMixin:
         conn.commit()
         return cursor.rowcount > 0
 
-    def bulk_delete_patterns(self, ids: List[int]) -> int:
-        """Hard-delete patterns by id. Returns rows deleted."""
+    def _bulk_delete_patterns_conn(self, conn, ids: List[int]) -> int:
+        """Hard-delete patterns by id on the caller's connection (no commit)."""
         if not ids:
             return 0
-        conn = self.get_connection()
         placeholders = ','.join('?' * len(ids))
         cursor = conn.execute(
             f"DELETE FROM ad_patterns WHERE id IN ({placeholders})",
             ids,
         )
-        conn.commit()
         return cursor.rowcount
+
+    def bulk_delete_patterns(self, ids: List[int]) -> int:
+        """Hard-delete patterns by id in its own transaction. Returns rows deleted."""
+        with self.transaction() as conn:
+            return self._bulk_delete_patterns_conn(conn, ids)
 
     def bulk_disable_patterns(self, ids: List[int]) -> int:
         """Set is_active=0 on patterns by id. Returns rows changed."""
@@ -322,14 +343,17 @@ class PatternMixin:
         )
         conn.commit()
 
-    def delete_ad_pattern(self, pattern_id: int) -> bool:
-        """Delete an ad pattern. Returns True if deleted."""
-        conn = self.get_connection()
+    def _delete_ad_pattern_conn(self, conn, pattern_id: int) -> bool:
+        """Delete an ad pattern on the caller's connection without committing."""
         cursor = conn.execute(
             "DELETE FROM ad_patterns WHERE id = ?", (pattern_id,)
         )
-        conn.commit()
         return cursor.rowcount > 0
+
+    def delete_ad_pattern(self, pattern_id: int) -> bool:
+        """Delete an ad pattern in its own transaction. Returns True if deleted."""
+        with self.transaction() as conn:
+            return self._delete_ad_pattern_conn(conn, pattern_id)
 
     def delete_all_community_patterns(self) -> int:
         """Hard-delete every pattern with source='community'. Returns the
@@ -473,17 +497,9 @@ class PatternMixin:
         )
         results = []
         for row in cursor.fetchall():
-            bounds = row['original_bounds']
+            bounds = _parse_bounds(row['original_bounds'])
             if bounds:
-                try:
-                    parsed = json.loads(bounds)
-                    if 'start' in parsed and 'end' in parsed:
-                        results.append({
-                            'start': float(parsed['start']),
-                            'end': float(parsed['end'])
-                        })
-                except (json.JSONDecodeError, KeyError, ValueError):
-                    pass
+                results.append(bounds)
         return results
 
     def get_confirmed_corrections(self, episode_id: str) -> List[Dict]:
@@ -499,17 +515,59 @@ class PatternMixin:
         )
         results = []
         for row in cursor.fetchall():
-            bounds = row['original_bounds']
+            bounds = _parse_bounds(row['original_bounds'])
             if bounds:
-                try:
-                    parsed = json.loads(bounds)
-                    if 'start' in parsed and 'end' in parsed:
-                        results.append({
-                            'start': float(parsed['start']),
-                            'end': float(parsed['end'])
-                        })
-                except (json.JSONDecodeError, KeyError, ValueError):
-                    pass
+                results.append(bounds)
+        return results
+
+    def get_podcast_corrections_for_prior(self, podcast_slug: str,
+                                          episode_ids: List[str]) -> List[Dict]:
+        """Get correction bounds for positional prior learning.
+
+        Returns dicts with episode_id, correction_type, start, end. create and
+        boundary_adjustment corrections use corrected_bounds; false_positive
+        and confirm use original_bounds. boundary_adjustment rows also carry
+        orig_start/orig_end (the bounds of the marker the user adjusted) so
+        the learner can match the adjustment to its marker. Rows without
+        valid bounds are skipped. Only corrections for episode_ids are
+        returned, keeping the query bounded to the learning window.
+        """
+        if not episode_ids:
+            return []
+        conn = self.get_connection()
+        placeholders = ','.join('?' for _ in episode_ids)
+        cursor = conn.execute(f'''
+            SELECT pc.episode_id, pc.correction_type,
+                   pc.original_bounds, pc.corrected_bounds
+            FROM pattern_corrections pc
+            JOIN episodes e ON pc.episode_id = e.episode_id
+            JOIN podcasts p ON e.podcast_id = p.id
+            WHERE p.slug = ?
+            AND pc.correction_type IN
+                ('false_positive', 'confirm', 'boundary_adjustment', 'create')
+            AND pc.episode_id IN ({placeholders})
+        ''', [podcast_slug] + list(episode_ids))
+
+        results = []
+        for row in cursor.fetchall():
+            if row['correction_type'] in ('create', 'boundary_adjustment'):
+                raw = row['corrected_bounds'] or row['original_bounds']
+            else:
+                raw = row['original_bounds']
+            bounds = _parse_bounds(raw)
+            if not bounds:
+                continue
+            result = {
+                'episode_id': row['episode_id'],
+                'correction_type': row['correction_type'],
+                **bounds,
+            }
+            if row['correction_type'] == 'boundary_adjustment':
+                orig = _parse_bounds(row['original_bounds'])
+                if orig:
+                    result['orig_start'] = orig['start']
+                    result['orig_end'] = orig['end']
+            results.append(result)
         return results
 
     def get_podcast_false_positive_texts(self, podcast_slug: str, limit: int = 100) -> List[Dict]:

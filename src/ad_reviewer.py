@@ -1,11 +1,19 @@
 """Opt-in LLM ad reviewer."""
 import logging
+import math
 import os
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from typing import Callable, Dict, List, Literal, Optional, Tuple
 
-from config import resolve_stage_tunables
+from config import (
+    resolve_stage_tunables,
+    AD_REVIEWER_PARALLEL_ADS_DEFAULT,
+    AD_REVIEWER_PARALLEL_ADS_MIN,
+    AD_REVIEWER_PARALLEL_ADS_MAX,
+    resolve_env_backed_default,
+)
 from database import DEFAULT_REVIEW_PROMPT, DEFAULT_RESURRECT_PROMPT
 from llm_capabilities import PASS_REVIEWER_1, PASS_REVIEWER_2
 from llm_client import get_llm_max_retries, get_llm_timeout
@@ -20,6 +28,29 @@ Verdict = Literal["confirmed", "adjust", "reject", "resurrect", "failure"]
 logger = logging.getLogger(__name__)
 
 
+def _resolve_reviewer_parallel_ads() -> int:
+    """Resolve the reviewer parallel-ads concurrency for this run.
+
+    DB-customized value wins over env default; both fall back to the
+    registered default in ENV_BACKED_SETTINGS. Clamped to [1, 32].
+    """
+    try:
+        from llm_client import _get_cached_setting
+        db_val = _get_cached_setting('ad_reviewer_parallel_ads')
+    except Exception:
+        db_val = None
+
+    raw = db_val if db_val is not None else resolve_env_backed_default('ad_reviewer_parallel_ads')
+    try:
+        n = int(raw) if raw is not None else AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    except (ValueError, TypeError):
+        n = AD_REVIEWER_PARALLEL_ADS_DEFAULT
+    return max(
+        AD_REVIEWER_PARALLEL_ADS_MIN,
+        min(AD_REVIEWER_PARALLEL_ADS_MAX, n),
+    )
+
+
 # How wide the resurrection band is below the user's min_cut_confidence
 # (e.g. threshold 0.80 -> resurrection eligible if 0.60 <= confidence < 0.80).
 RESURRECT_BAND_WIDTH = 0.20
@@ -31,6 +62,25 @@ RESURRECT_BAND_WIDTH = 0.20
 # from the LLM surface as adjust verdicts in the audit log; only true
 # rounding noise rounds away.
 _CONFIRMED_BOUNDARY_TOLERANCE_S = 0.1
+
+
+def _first_num(d: dict, keys: tuple, default: float) -> float:
+    """Return the first finite numeric value among keys, else default.
+
+    Skips None, booleans, and NaN/Inf. The reviewer prompt may carry the
+    correction under a corrected_/adjusted_ key when start/end is absent.
+    """
+    for k in keys:
+        v = d.get(k)
+        if v is None or isinstance(v, bool):
+            continue
+        try:
+            f = float(v)
+        except (TypeError, ValueError):
+            continue
+        if math.isfinite(f):
+            return f
+    return default
 
 
 @dataclass
@@ -145,19 +195,31 @@ class AdReviewer:
 
         result = ReviewResult(verdicts=[])
 
-        for ad in accepted_ads:
-            verdict, updated_ad = self._review_single(
-                ad=ad,
-                pool="accepted",
-                pass_num=pass_num,
-                segments=segments,
-                episode_meta=episode_meta,
-                system_prompt=review_prompt,
-                model=model,
-                max_shift=max_shift,
+        parallel_ads = _resolve_reviewer_parallel_ads()
+        if parallel_ads > 1 and (len(accepted_ads) + len(resurrection_eligible)) > 1:
+            logger.info(
+                f"[{episode_meta.get('slug')}:{episode_meta.get('episode_id')}] "
+                f"Reviewer pass {pass_num} running "
+                f"{len(accepted_ads)}+{len(resurrection_eligible)} ads with "
+                f"concurrency={parallel_ads}"
             )
-            result.verdicts.append(verdict)
 
+        # Accepted pool first. Position-indexed merge preserves input order so
+        # verdicts list and downstream pattern-correction lookups match the
+        # original sequential semantics.
+        accepted_results = self._run_review_batch(
+            accepted_ads,
+            pool="accepted",
+            pass_num=pass_num,
+            segments=segments,
+            episode_meta=episode_meta,
+            system_prompt=review_prompt,
+            model=model,
+            max_shift=max_shift,
+            max_workers=parallel_ads,
+        )
+        for verdict, updated_ad in accepted_results:
+            result.verdicts.append(verdict)
             if verdict.verdict == "reject":
                 marked = dict(updated_ad)
                 marked["was_cut"] = False
@@ -168,23 +230,21 @@ class AdReviewer:
                 marked["source"] = "reviewer"
                 result.rejected_by_reviewer.append(marked)
             else:
-                # confirmed/adjust/failure stay in cut list; _review_single
-                # already mutated boundaries for adjust.
                 result.accepted_after_review.append(updated_ad)
 
-        for ad in resurrection_eligible:
-            verdict, updated_ad = self._review_single(
-                ad=ad,
-                pool="resurrection",
-                pass_num=pass_num,
-                segments=segments,
-                episode_meta=episode_meta,
-                system_prompt=resurrect_prompt,
-                model=model,
-                max_shift=max_shift,
-            )
+        resurrection_results = self._run_review_batch(
+            resurrection_eligible,
+            pool="resurrection",
+            pass_num=pass_num,
+            segments=segments,
+            episode_meta=episode_meta,
+            system_prompt=resurrect_prompt,
+            model=model,
+            max_shift=max_shift,
+            max_workers=parallel_ads,
+        )
+        for verdict, updated_ad in resurrection_results:
             result.verdicts.append(verdict)
-
             if verdict.verdict == "resurrect":
                 marked = dict(updated_ad)
                 marked["was_cut"] = True
@@ -198,6 +258,39 @@ class AdReviewer:
 
         self._flush_log(result.verdicts, episode_meta)
         return result
+
+    def _run_review_batch(self, ads, *, pool, pass_num, segments,
+                          episode_meta, system_prompt, model, max_shift,
+                          max_workers):
+        """Run _review_single across a list of ads, sequential or via thread
+        pool depending on max_workers. Returns (verdict, updated_ad) pairs
+        in input order regardless of completion order."""
+        if not ads:
+            return []
+
+        def _run_one(idx):
+            return self._review_single(
+                ad=ads[idx],
+                pool=pool,
+                pass_num=pass_num,
+                segments=segments,
+                episode_meta=episode_meta,
+                system_prompt=system_prompt,
+                model=model,
+                max_shift=max_shift,
+            )
+
+        if max_workers <= 1 or len(ads) == 1:
+            return [_run_one(i) for i in range(len(ads))]
+
+        ordered = [None] * len(ads)
+        with ThreadPoolExecutor(max_workers=max_workers,
+                                thread_name_prefix='reviewer') as executor:
+            futures = {executor.submit(_run_one, i): i for i in range(len(ads))}
+            for fut in as_completed(futures):
+                idx = futures[fut]
+                ordered[idx] = fut.result()
+        return ordered
 
     def _review_single(
         self,
@@ -316,11 +409,12 @@ class AdReviewer:
                 ad,
             )
 
-        try:
-            new_start = float(kept.get("start", original_start))
-            new_end = float(kept.get("end", original_end))
-        except (TypeError, ValueError):
-            new_start, new_end = original_start, original_end
+        # Schema asks for start/end; fall back to corrected_/adjusted_ only when
+        # the model omits them (some responses carry the correction there).
+        new_start = _first_num(
+            kept, ("start", "corrected_start", "adjusted_start"), original_start)
+        new_end = _first_num(
+            kept, ("end", "corrected_end", "adjusted_end"), original_end)
         reason = kept.get("reason")
         try:
             confidence = float(kept["confidence"]) if "confidence" in kept else None
@@ -344,6 +438,30 @@ class AdReviewer:
                 f"{new_start:.1f}-{new_end:.1f} to "
                 f"{clamped_start:.1f}-{clamped_end:.1f} (cap {max_shift}s)"
             )
+
+        # A merged ad's [start, end] is the union of multiple independently
+        # confirmed sub-ads. Every merge that joins NON-overlapping spans
+        # (adjacent distinct ads, or same-sponsor fragments) sets the canonical
+        # merged_distinct_ads flag: _merge_close_ads, merge_same_sponsor_ads,
+        # and the gap branch of deduplicate_window_ads / _merge_detection_results.
+        # The reviewer refines boundaries; it must not pull one inward and
+        # silently drop a still-confirmed sub-ad. Allow outward growth
+        # (leading/trailing CTA), forbid inward shrink.
+        #
+        # Overlap-based dedup (the same ad re-detected across windows/stages)
+        # does NOT set the flag, so ordinary single ads still tighten normally.
+        if ad.get('merged_distinct_ads'):
+            floor_start = min(clamped_start, original_start)
+            floor_end = max(clamped_end, original_end)
+            if floor_start != clamped_start or floor_end != clamped_end:
+                logger.info(
+                    f"[{slug}:{episode_id}] Reviewer inward shrink blocked on "
+                    f"merged ad @ {original_start:.1f}-{original_end:.1f}s: "
+                    f"{clamped_start:.1f}-{clamped_end:.1f} -> "
+                    f"{floor_start:.1f}-{floor_end:.1f} (expand-only)"
+                )
+            clamped_start, clamped_end = floor_start, floor_end
+
         if clamped_end <= clamped_start:
             clamped_start, clamped_end = original_start, original_end
 
@@ -493,8 +611,8 @@ class AdReviewer:
         )
         if "{max_boundary_shift_seconds}" not in prompt:
             rendered = (
-                f"{rendered}\n\nBoundary cap: any adjusted_start or "
-                f"adjusted_end must be within {max_shift} seconds of the "
+                f"{rendered}\n\nBoundary cap: any start or "
+                f"end must be within {max_shift} seconds of the "
                 f"original detected boundaries."
             )
         return rendered

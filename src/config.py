@@ -60,6 +60,24 @@ MID_ROLL_1 = (0.15, 0.85)       # Continuous mid-roll coverage
 POST_ROLL = (0.95, 1.0)         # Last 5%
 
 # ============================================================
+# Positional Prior (issue #360, opt-in experiment)
+# ============================================================
+POSITIONAL_PRIOR_MIN_EPISODES = 5        # Feed needs this many learnable episodes
+POSITIONAL_PRIOR_RECENT_EPISODES = 30    # Most-recent window so format changes age out
+POSITIONAL_PRIOR_MIN_EPISODE_SECONDS = 60  # Trailers/bonus clips below this never feed learning
+POSITIONAL_PRIOR_MIN_ZONE_SUPPORT = 0.60 # Zone must appear in >= 60% of considered episodes
+POSITIONAL_PRIOR_CLUSTER_GAP = 0.05      # Normalized gap-merge threshold for 1D clustering
+POSITIONAL_PRIOR_MAX_ZONE_SPAN = 0.10    # Max normalized cluster width; breaks drift chaining
+POSITIONAL_PRIOR_ZONE_MARGIN = 0.03      # Padding around cluster min/max -> zone bounds
+POSITIONAL_PRIOR_MAX_ZONES = 6
+POSITIONAL_PRIOR_EVENT_DEDUPE_GAP = 0.02 # Events this close within an episode count once
+POSITIONAL_PRIOR_MIN_LLM_CONFIDENCE = 0.85  # Untrusted-stage cuts below this never feed the prior
+POSITIONAL_PRIOR_MIN_BOOST = 0.05        # Boost at the support gate, same as today's mid-roll boost
+POSITIONAL_PRIOR_MAX_BOOST = 0.10        # Boost at 100% zone support, same as today's pre-roll boost
+POSITIONAL_PRIOR_MAX_DURATION_RATIO = 2.0  # Prior skipped when episode/median length ratio exceeds this
+POSITIONAL_PRIOR_HISTOGRAM_BUCKETS = 20  # Position-distribution bins for the UI panel (keep a divisor of 100 for clean axis labels)
+
+# ============================================================
 # Ad Limits
 # ============================================================
 MAX_AD_PERCENTAGE = 0.30        # 30% of episode is suspicious
@@ -120,13 +138,16 @@ FINGERPRINT_MATCH_THRESHOLD = 0.65   # Audio fingerprint similarity threshold
 MIN_KEYWORD_LENGTH = 3              # Minimum keyword length for transcript search
 
 BOUNDARY_EXTENSION_WINDOW = 10.0   # Seconds before/after ad to check for ad content
-BOUNDARY_EXTENSION_MAX = 15.0      # Max seconds to extend a boundary
+BOUNDARY_EXTENSION_MAX = 30.0      # Max seconds to extend a boundary
+BOUNDARY_EXTENSION_CONNECTOR_SKIP = 2  # Max consecutive non-ad segments the end walk may skip
+BOUNDARY_EXTENSION_SKIP_MAX = 8.0  # Max total seconds of non-ad content the end walk may skip
 AD_CONTENT_URL_PATTERNS = ['.com', '.tv', '.co', '.org', '.net', '.io']
 AD_CONTENT_PROMO_PHRASES = [
     'use code', 'percent off', 'visit', 'sign up', 'free trial',
     'promo code', 'check out', 'head to', 'go to', 'click the link',
     'dot com', 'slash', 'coupon', 'discount', 'offer code',
 ]
+AD_CONTENT_PHONE_PATTERNS = ['1-800', '1 800', 'one eight hundred']
 
 # ============================================================
 # Ad Duration Estimation
@@ -147,10 +168,35 @@ MIN_TRANSITION_AD_DURATION = 15.0    # Min seconds for a valid transition-bounde
 MAX_TRANSITION_AD_DURATION = 180.0   # Max seconds for a valid transition-bounded ad
 
 # ============================================================
+# Audio Cue Detection (issue #350, opt-in experiment)
+# ============================================================
+# Detects a short non-spoken cue (a "ding"/stinger) that some shows play just
+# before an ad break by band-passing the audio to the cue's frequency band and
+# flagging brief loudness bursts that stand out from the speech baseline. The
+# cue is emitted as an ``audio_cue`` signal into the LLM prompt as a timing
+# hint -- it never marks an ad on its own. Off by default; gated by the
+# ``audio_cue_detection_enabled`` setting.
+AUDIO_CUE_FREQ_MIN_HZ = 1500         # Low edge of the band a stinger lives in
+AUDIO_CUE_FREQ_MAX_HZ = 8000         # High edge of that band
+AUDIO_CUE_PROMINENCE_DB = 9.0        # dB above the in-band baseline to count as a burst
+AUDIO_CUE_MIN_CONFIDENCE = 0.80      # Drop cues below this confidence (also the prompt floor)
+AUDIO_CUE_MIN_DURATION = 0.10        # Min burst length (s); shorter is noise
+AUDIO_CUE_MAX_DURATION = 2.0         # Max burst length (s); longer is content/music, not a ding
+AUDIO_CUE_ONSET_LAG_SECONDS = 0.2    # ebur128 momentary loudness integrates over 400ms, so the
+                                     # first above-threshold frame lags the true onset; pull the
+                                     # reported start back by this much
+
+# ============================================================
 # Audio Processing
 # ============================================================
 MIN_AD_DURATION_FOR_REMOVAL = 10.0   # Min ad duration to actually remove from audio
+SHORT_CUT_KEEP_CONFIDENCE = 0.9      # Keep a shorter cut anyway at/above this confidence
+                                     # (fingerprint-stage cuts are always kept)
 POST_ROLL_TRIM_THRESHOLD = 30.0      # Threshold for trimming post-roll content
+MERGE_GAP_SECONDS = 1.0              # Cuts separated by less than this merge into one
+                                     # (distinct from the validator's MERGE_GAP_THRESHOLD)
+SEGMENT_AD_COVERAGE_THRESHOLD = 0.8  # Drop a transcript segment when removed ads
+                                     # cover more than this fraction of it
 
 # ============================================================
 # Subprocess Timeouts (seconds)
@@ -171,8 +217,6 @@ LLM_TIMEOUT_LOCAL = 600.0            # Ollama / local models (10 min)
 LLM_RETRY_MAX_RETRIES = 3            # Default retries for cloud APIs
 LLM_RETRY_MAX_RETRIES_LOCAL = 2      # Fewer retries for local (each is slow)
 AD_DETECTION_MAX_TOKENS = int(os.environ.get('AD_DETECTION_MAX_TOKENS', '4096'))
-AD_DETECTION_PARALLEL_WINDOWS = int(os.environ.get('AD_DETECTION_PARALLEL_WINDOWS', '4'))
-# 0 = unlimited (one thread per window), 1 = sequential, N = cap at N concurrent windows
 
 # ============================================================
 # Outbound HTTP
@@ -228,10 +272,23 @@ VAD_GAP_MID_MIN_SECONDS_DEFAULT = 8.0    # mid: cut only with signoff AND resume
 VAD_GAP_TAIL_MIN_SECONDS_DEFAULT = 3.0   # tail: cut when no postroll already covers it
 VAD_GAP_CONFIDENCE = 0.75                # emitted marker confidence
 
+# Default base URL for OpenAI-compatible providers (single source of truth;
+# the OPENAI_BASE_URL env var overrides). Used by get_effective_base_url, the
+# LLMClient fallback, and the GET /settings defaults block.
+DEFAULT_OPENAI_BASE_URL = 'http://localhost:8000/v1'
+
 # OpenRouter API
 OPENROUTER_BASE_URL = 'https://openrouter.ai/api/v1'
 OPENROUTER_HTTP_REFERER = 'https://github.com/ttlequals0/minuspod'
 OPENROUTER_APP_TITLE = 'MinusPod'
+
+# OpenRouter router aliases. These are valid model IDs that route dynamically
+# but are not returned by /api/v1/models, so they never show up in the model
+# dropdown unless we inject them. (id, display_name) pairs.
+OPENROUTER_ROUTER_ALIASES = (
+    ('openrouter/free', 'OpenRouter: Free (routes to free models)'),
+    ('openrouter/auto', 'OpenRouter: Auto (routes to best model for the prompt)'),
+)
 
 MASTER_PASSPHRASE = os.environ.get('MINUSPOD_MASTER_PASSPHRASE')
 
@@ -646,57 +703,114 @@ def resolve_stage_tunables(prefix: str, settings: Optional[dict] = None):
     return max_tokens, temperature, reasoning
 
 
-# ============================================================
-# Audio output
-# ============================================================
-# Allowed encode bitrates for processed audio. Single source of truth for the
-# settings API validation; mirror any change in frontend AudioSection.tsx.
+# Allowed encode bitrates for processed audio. Mirror any change in
+# frontend/src/pages/settings/AudioSection.tsx.
 ALLOWED_AUDIO_BITRATES = ('64k', '96k', '128k', '192k', '256k')
+DEFAULT_AUDIO_BITRATE = '128k'
 
 
-# ============================================================
-# Env-backed settings registry
-# ============================================================
-# Settings whose default is sourced from an environment variable. Used as the
-# single source of truth for (a) seeding + per-restart re-sync in the schema
-# initializer, (b) the GET /settings defaults, and (c) reset_setting -- so the
-# "env -> default" mapping stops being duplicated and drifting across those
-# three sites.
+# Ad-detection parallelism. Bounded ceiling protects against accidental
+# fan-out into upstream LLM rate limits. Default of 4 was chosen as a
+# conservative starting point for tier 1+ Anthropic / OpenRouter plans.
+AD_DETECTION_PARALLEL_WINDOWS_DEFAULT = 4
+AD_DETECTION_PARALLEL_WINDOWS_MIN = 1
+AD_DETECTION_PARALLEL_WINDOWS_MAX = 32
+
+
+# Ad-reviewer parallelism. Tracks the same shape as the detector knob but
+# is tuned separately because each reviewer call is one ad (not one
+# transcript window), so the cost / latency profile is different.
+AD_REVIEWER_PARALLEL_ADS_DEFAULT = 4
+AD_REVIEWER_PARALLEL_ADS_MIN = 1
+AD_REVIEWER_PARALLEL_ADS_MAX = 32
+
+
+def _validate_audio_bitrate(value: str) -> bool:
+    return value in ALLOWED_AUDIO_BITRATES
+
+
+def _validate_bool_string(value: str) -> bool:
+    return str(value).strip().lower() in ('true', 'false', '1', '0', 'yes', 'no')
+
+
+# Truthy set shared by every boolean settings coercion. Mirror in
+# frontend code if the wire format ever needs to accept more variants.
+_TRUTHY_STRINGS = ('true', '1', 'yes')
+
+
+def coerce_bool_setting(value) -> bool:
+    """Coerce a raw setting value to bool the same way everywhere.
+
+    Accepts native ``bool``, strings, or anything string-coercible. Returns
+    True if the lowercased string form is in the truthy set, else False.
+    Used by settings GET, PUT, and the transcriber consumer so all four
+    sites agree on the truthy/falsy boundary.
+    """
+    if isinstance(value, bool):
+        return value
+    return str(value).strip().lower() in _TRUTHY_STRINGS
+
+
+def _validate_parallel_windows(value: str) -> bool:
+    try:
+        n = int(value)
+    except (ValueError, TypeError):
+        return False
+    return AD_DETECTION_PARALLEL_WINDOWS_MIN <= n <= AD_DETECTION_PARALLEL_WINDOWS_MAX
+
+
+def _validate_reviewer_parallel(value: str) -> bool:
+    try:
+        n = int(value)
+    except (ValueError, TypeError):
+        return False
+    return AD_REVIEWER_PARALLEL_ADS_MIN <= n <= AD_REVIEWER_PARALLEL_ADS_MAX
+
+
+# Registry of settings whose default is an environment variable.
 #
-# Precedence (Model B): a user-customized row (is_default=0) always wins;
-# otherwise the value tracks the live env var on every restart, falling back to
-# the hardcoded default. Derived settings with non-trivial unit/provider logic
-# (verification_model / chapters_model via OPENAI_MODEL, retention_days via
-# RETENTION_PERIOD) are intentionally kept out of this registry and handled by
-# their existing bespoke code.
+# Each tuple: (db_key, env_var, fallback_default, optional_validator)
 #
-# Each entry: (db_key, env_var, hardcoded_default, converter). converter maps a
-# raw env string to the stored string form (None == identity).
+# Behavior in src/database/schema/__init__.py _run_env_backed_settings_migration:
+# - On every boot: rows where is_default=1 re-sync to the current env_var
+#   value. Rows where is_default=0 (user customized via UI) are never touched.
+# - One-shot corrective migration on the FIRST 2.5.23 boot: any row where
+#   is_default=1 but value != env_var is treated as evidence the value was
+#   customized in the past without the flag being set; the migration flips
+#   is_default to 0 and KEEPS the existing value. The migration never writes
+#   value during the corrective pass -- data is never lost.
+# - validator runs on the env_var value at boot. If validation fails the
+#   env_var is ignored and the registry's fallback_default is used instead.
 ENV_BACKED_SETTINGS = (
-    ('whisper_model',                   'WHISPER_MODEL',           'small',                     None),
-    ('whisper_language',                'WHISPER_LANGUAGE',        'en',                        None),
-    ('llm_provider',                    'LLM_PROVIDER',            'anthropic',                 None),
-    ('openai_base_url',                 'OPENAI_BASE_URL',         'http://localhost:8000/v1',  None),
-    ('processing_soft_timeout_seconds', 'PROCESSING_SOFT_TIMEOUT', '3600',                      None),
-    ('processing_hard_timeout_seconds', 'PROCESSING_HARD_TIMEOUT', '7200',                      None),
-    ('audio_bitrate',                   'AUDIO_BITRATE',           '128k',                      None),
+    ('llm_provider', 'LLM_PROVIDER', 'anthropic', None),
+    ('audio_bitrate', 'AUDIO_BITRATE', DEFAULT_AUDIO_BITRATE, _validate_audio_bitrate),
+    ('skip_flac_compression', 'SKIP_FLAC_COMPRESSION', 'false', _validate_bool_string),
+    (
+        'ad_detection_parallel_windows',
+        'AD_DETECTION_PARALLEL_WINDOWS',
+        str(AD_DETECTION_PARALLEL_WINDOWS_DEFAULT),
+        _validate_parallel_windows,
+    ),
+    (
+        'ad_reviewer_parallel_ads',
+        'AD_REVIEWER_PARALLEL_ADS',
+        str(AD_REVIEWER_PARALLEL_ADS_DEFAULT),
+        _validate_reviewer_parallel,
+    ),
 )
 
-_ENV_BACKED_BY_KEY = {entry[0]: entry for entry in ENV_BACKED_SETTINGS}
-ENV_BACKED_KEYS = frozenset(_ENV_BACKED_BY_KEY)
 
-
-def env_backed_default(db_key: str) -> str:
-    """Resolve the current env-derived default for an env-backed setting.
-
-    Returns the live env var value when set (non-empty), else the hardcoded
-    default. Raises KeyError for keys not in ENV_BACKED_SETTINGS.
+def resolve_env_backed_default(key: str) -> Optional[str]:
+    """Return the validated env_var value for a registered key, or its
+    fallback default. Returns None if the key is not in ENV_BACKED_SETTINGS.
     """
-    try:
-        _, env_var, default, conv = _ENV_BACKED_BY_KEY[db_key]
-    except KeyError:
-        raise KeyError(db_key)
-    raw = os.environ.get(env_var)
-    if raw is None or raw.strip() == '':
-        return default
-    return conv(raw) if conv else raw
+    for db_key, env_var, fallback, validator in ENV_BACKED_SETTINGS:
+        if db_key != key:
+            continue
+        raw = os.environ.get(env_var)
+        if raw is None:
+            return fallback
+        if validator is not None and not validator(raw):
+            return fallback
+        return raw
+    return None

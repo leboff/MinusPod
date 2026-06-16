@@ -9,8 +9,19 @@ from ad_reviewer import (
     RESURRECT_BAND_WIDTH,
     ReviewResult,
     ReviewVerdict,
+    _first_num,
     split_resurrection_pool,
 )
+
+
+def test_first_num_prefers_start_and_rejects_non_finite():
+    """start wins over corrected_*; NaN/Inf/bool/garbage fall through to default."""
+    assert _first_num({'start': 115.0, 'corrected_start': 120.0}, ('start', 'corrected_start'), 999.0) == 115.0
+    assert _first_num({'corrected_start': 7.0}, ('start', 'corrected_start'), 999.0) == 7.0
+    assert _first_num({'start': float('nan')}, ('start',), 5.0) == 5.0
+    assert _first_num({'start': float('inf')}, ('start',), 5.0) == 5.0
+    assert _first_num({'start': True}, ('start',), 5.0) == 5.0
+    assert _first_num({'start': 'x'}, ('start',), 5.0) == 5.0
 
 
 def _mock_segments():
@@ -158,6 +169,30 @@ def test_array_with_shifted_boundaries_yields_adjust():
     assert out['reviewer_original_end'] == 180.0
 
 
+def test_corrected_start_keys_are_applied_as_adjust():
+    """A reviewer response using corrected_start/corrected_end still adjusts."""
+    reviewer = _build_reviewer({
+        'review_prompt': 'review',
+        'resurrect_prompt': 'resurrect',
+        'review_max_boundary_shift': '60',
+    })
+    reviewer._llm_client.messages_create.return_value = _resp(
+        '[{"corrected_start": 115.0, "corrected_end": 185.0, "confidence": 0.88, '
+        '"reason": "Pulled start back to include the opening line"}]'
+    )
+    ad = {'start': 120.0, 'end': 180.0, 'confidence': 0.9}
+    result = reviewer.review(
+        accepted_ads=[ad], resurrection_eligible=[],
+        segments=_mock_segments(), episode_meta=_mock_episode_meta(),
+        pass_num=1, pass_model='claude-test',
+    )
+    out = result.accepted_after_review[0]
+    assert result.verdicts[0].verdict == 'adjust'
+    assert out['start'] == 115.0
+    assert out['end'] == 185.0
+    assert out['reviewer_original_start'] == 120.0
+
+
 def test_array_with_shift_outside_cap_clamps():
     """Shifts beyond review_max_boundary_shift are clamped to the cap."""
     reviewer = _build_reviewer({
@@ -181,6 +216,100 @@ def test_array_with_shift_outside_cap_clamps():
     assert out['end'] == 210.0    # clamped: original_end + cap
     assert out['reviewer_original_start'] == 120.0
     assert out['reviewer_original_end'] == 180.0
+
+
+def test_merged_ad_inward_end_shrink_is_blocked():
+    """A merged ad's span is the union of confirmed sub-ads; the reviewer may
+    expand the start but an inward end pull (which would drop a sub-ad) is
+    refused. Mirrors the Grainger case: start grows, end held at the union."""
+    reviewer = _build_reviewer({
+        'review_prompt': 'review',
+        'resurrect_prompt': 'resurrect',
+        'review_max_boundary_shift': '60',
+    })
+    # Model wants start earlier (expand) and end earlier (shrink past a sub-ad).
+    reviewer._llm_client.messages_create.return_value = _resp(
+        '[{"start": 100.0, "end": 160.0, "confidence": 0.85}]'
+    )
+    ad = {'start': 120.0, 'end': 180.0, 'confidence': 0.9, 'merged_distinct_ads': True}
+    result = reviewer.review(
+        accepted_ads=[ad], resurrection_eligible=[],
+        segments=_mock_segments(), episode_meta=_mock_episode_meta(),
+        pass_num=1, pass_model='claude-test',
+    )
+    out = result.accepted_after_review[0]
+    assert result.verdicts[0].verdict == 'adjust'
+    assert out['start'] == 100.0   # outward expansion allowed
+    assert out['end'] == 180.0     # inward shrink blocked, held at union end
+
+
+def test_merged_ad_outward_growth_allowed():
+    """Expand-only does not block legitimate outward growth on a merged ad."""
+    reviewer = _build_reviewer({
+        'review_prompt': 'review',
+        'resurrect_prompt': 'resurrect',
+        'review_max_boundary_shift': '60',
+    })
+    reviewer._llm_client.messages_create.return_value = _resp(
+        '[{"start": 110.0, "end": 195.0, "confidence": 0.85}]'
+    )
+    ad = {'start': 120.0, 'end': 180.0, 'confidence': 0.9, 'merged_distinct_ads': True}
+    result = reviewer.review(
+        accepted_ads=[ad], resurrection_eligible=[],
+        segments=_mock_segments(), episode_meta=_mock_episode_meta(),
+        pass_num=1, pass_model='claude-test',
+    )
+    out = result.accepted_after_review[0]
+    assert result.verdicts[0].verdict == 'adjust'
+    assert out['start'] == 110.0
+    assert out['end'] == 195.0
+
+
+def test_merged_distinct_full_inward_shrink_yields_confirmed():
+    """When both edges are pulled inward on a merged span and fully blocked,
+    the net delta is zero, so the verdict is confirmed (no change applied)."""
+    reviewer = _build_reviewer({
+        'review_prompt': 'review',
+        'resurrect_prompt': 'resurrect',
+        'review_max_boundary_shift': '60',
+    })
+    reviewer._llm_client.messages_create.return_value = _resp(
+        '[{"start": 130.0, "end": 165.0, "confidence": 0.85}]'
+    )
+    ad = {'start': 120.0, 'end': 180.0, 'confidence': 0.9, 'merged_distinct_ads': True}
+    result = reviewer.review(
+        accepted_ads=[ad], resurrection_eligible=[],
+        segments=_mock_segments(), episode_meta=_mock_episode_meta(),
+        pass_num=1, pass_model='claude-test',
+    )
+    out = result.accepted_after_review[0]
+    assert out['start'] == 120.0   # inward start push blocked
+    assert out['end'] == 180.0     # inward end pull blocked
+    # Both edges fully cancelled -> net delta is zero -> confirmed, not adjust.
+    assert result.verdicts[0].verdict == 'confirmed'
+
+
+def test_non_merged_ad_inward_shrink_still_allowed():
+    """The guard is scoped to merged ads; a single detected ad can still be
+    tightened inward by the reviewer."""
+    reviewer = _build_reviewer({
+        'review_prompt': 'review',
+        'resurrect_prompt': 'resurrect',
+        'review_max_boundary_shift': '60',
+    })
+    reviewer._llm_client.messages_create.return_value = _resp(
+        '[{"start": 130.0, "end": 170.0, "confidence": 0.85}]'
+    )
+    ad = {'start': 120.0, 'end': 180.0, 'confidence': 0.9}
+    result = reviewer.review(
+        accepted_ads=[ad], resurrection_eligible=[],
+        segments=_mock_segments(), episode_meta=_mock_episode_meta(),
+        pass_num=1, pass_model='claude-test',
+    )
+    out = result.accepted_after_review[0]
+    assert result.verdicts[0].verdict == 'adjust'
+    assert out['start'] == 130.0   # inward tighten allowed (not merged)
+    assert out['end'] == 170.0
 
 
 def test_empty_array_yields_reject():

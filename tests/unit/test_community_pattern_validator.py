@@ -88,7 +88,7 @@ def test_validate_doc_rejects_unknown_tags():
         'text_template': 'Squarespace dot com slash show for ten percent off your website today launch confidently!',
         'sponsor_tags': ['tech', 'not_a_real_tag'],
     }
-    result = validate_doc('a.json', doc, seed, [])
+    result = validate_doc('squarespace-abc.json', doc, seed, [])
     assert result.status == 'reject'
     assert any('unknown tag: not_a_real_tag' in e for e in result.errors)
 
@@ -103,7 +103,7 @@ def test_validate_doc_warns_unknown_sponsor():
         'text_template': 'AcmeBrandThatDoesNotExist dot com slash show ten percent off launch your idea today now',
         'sponsor_tags': [],
     }
-    result = validate_doc('a.json', doc, seed, [])
+    result = validate_doc('acmebrandthatdoesnotexist-abc.json', doc, seed, [])
     assert result.status == 'warn'
     assert result.sponsor_match == 'unknown'
 
@@ -132,7 +132,7 @@ def test_validate_doc_rejects_multi_sponsor_block():
         ),
         'sponsor_tags': ['tech'],
     }
-    result = validate_doc('a.json', doc, seed, [])
+    result = validate_doc('squarespace-abc.json', doc, seed, [])
     assert result.status == 'reject'
     assert any('multi-sponsor block' in e for e in result.errors), result.errors
 
@@ -152,7 +152,7 @@ def test_validate_doc_accepts_own_alias_in_text():
         ),
         'sponsor_tags': ['supplements'],
     }
-    result = validate_doc('a.json', doc, seed, [])
+    result = validate_doc('athletic-greens-abc.json', doc, seed, [])
     assert result.status in ('pass', 'warn'), (result.status, result.errors)
     assert not any('multi-sponsor block' in e for e in result.errors)
 
@@ -175,7 +175,7 @@ def test_validate_doc_accepts_seed_alias_of_declared_sponsor():
         ),
         'sponsor_tags': ['supplements'],
     }
-    result = validate_doc('a.json', doc, seed, [])
+    result = validate_doc('athletic-greens-abc.json', doc, seed, [])
     assert result.status in ('pass', 'warn'), (result.status, result.errors)
     assert not any('multi-sponsor block' in e for e in result.errors)
 
@@ -270,6 +270,95 @@ def test_validate_doc_accepts_alias_as_declared_sponsor():
         ),
         'sponsor_tags': ['supplements'],
     }
-    result = validate_doc('a.json', doc, seed, [])
+    result = validate_doc('ag1-abc.json', doc, seed, [])
     assert result.status in ('pass', 'warn'), (result.status, result.errors)
     assert not any('multi-sponsor block' in e for e in result.errors)
+
+
+from tools.community_pattern_validator import _filename_errors  # noqa: E402
+
+
+def _doc(**overrides):
+    base = {
+        'community_id': '07df78ed-9b7f-4600-a9b7-1aee45b5bfc7',
+        'version': 1,
+        'sponsor': 'Shopify',
+        'sponsor_aliases': [],
+        'sponsor_tags': ['universal'],
+        'text_template': 'Shopify is the commerce platform behind millions of businesses around the world.',
+        'intro_variants': [],
+        'outro_variants': [],
+    }
+    base.update(overrides)
+    return base
+
+
+def test_filename_errors_rejects_wrong_slug():
+    errs = _filename_errors('patterns/community/spotify-07df78ed.json', _doc())
+    assert any('shopify-07df78ed.json' in e for e in errs)
+
+
+def test_filename_errors_rejects_wrong_short_uuid():
+    errs = _filename_errors('patterns/community/shopify-deadbeef.json', _doc())
+    assert any('07df78ed' in e for e in errs)
+
+
+def test_filename_errors_accepts_correct_name():
+    assert _filename_errors('patterns/community/shopify-07df78ed.json', _doc()) == []
+
+
+def test_filename_errors_skips_when_community_id_missing():
+    """Required-field check owns missing community_id; we don't double-report."""
+    assert _filename_errors('patterns/community/whatever.json', _doc(community_id='')) == []
+
+
+from tools.community_pattern_validator import _file_shape_warnings  # noqa: E402
+
+
+def test_file_shape_warns_bundle_named_as_per_pattern():
+    raw = {'format': BUNDLE_FORMAT, 'patterns': []}
+    warns = _file_shape_warnings('patterns/community/shopify-07df78ed.json', raw)
+    assert any('bundle' in w.lower() for w in warns)
+
+
+def test_file_shape_warns_per_pattern_named_as_bundle():
+    raw = {'community_id': 'abc', 'sponsor': 'Shopify'}
+    warns = _file_shape_warnings('patterns/community/minuspod-submission-xyz.json', raw)
+    assert any('per-pattern' in w.lower() for w in warns)
+
+
+def test_file_shape_silent_on_matching_pairs():
+    assert _file_shape_warnings(
+        'patterns/community/minuspod-submission-xyz.json',
+        {'format': BUNDLE_FORMAT, 'patterns': []},
+    ) == []
+    assert _file_shape_warnings(
+        'patterns/community/shopify-07df78ed.json',
+        {'community_id': 'abc', 'sponsor': 'Shopify'},
+    ) == []
+
+
+from tools.community_pattern_validator import _truncation_warnings  # noqa: E402
+
+
+def test_truncation_warns_on_outro_ending_in_stopword():
+    doc = _doc(outro_variants=['Go to V-A-N-T-A dot com slash com'])
+    warns = _truncation_warnings(doc)
+    assert any('outro_variants[0]' in w and 'slash com' in w.lower() for w in warns)
+
+
+def test_truncation_warns_on_intro_ending_in_article():
+    doc = _doc(intro_variants=['Today we are sponsored by the'])
+    warns = _truncation_warnings(doc)
+    assert any('intro_variants[0]' in w for w in warns)
+
+
+def test_truncation_silent_on_clean_variants():
+    doc = _doc(outro_variants=['Visit shopify dot com slash explained.'])
+    assert _truncation_warnings(doc) == []
+
+
+def test_truncation_silent_on_short_words_in_middle():
+    """Don't false-positive when the variant has 'to' or 'a' anywhere but the end."""
+    doc = _doc(outro_variants=['Go to shopify dot com.'])
+    assert _truncation_warnings(doc) == []

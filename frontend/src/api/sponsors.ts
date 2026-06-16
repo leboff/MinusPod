@@ -1,10 +1,11 @@
 import { apiRequest } from './client';
-import { Sponsor, SponsorNormalization } from './types';
+import { Sponsor, SponsorNormalization, NormalizationCategory } from './types';
 
 // Sponsor API
 
-export async function getSponsors(): Promise<Sponsor[]> {
-  const response = await apiRequest<{ sponsors: Sponsor[] }>('/sponsors');
+export async function getSponsors(includeInactive = false): Promise<Sponsor[]> {
+  const qs = includeInactive ? '?include_inactive=true' : '';
+  const response = await apiRequest<{ sponsors: Sponsor[] }>(`/sponsors${qs}`);
   return response.sponsors;
 }
 
@@ -12,8 +13,8 @@ export async function addSponsor(sponsor: {
   name: string;
   aliases?: string[];
   category?: string;
-}): Promise<Sponsor> {
-  return apiRequest<Sponsor>('/sponsors', {
+}): Promise<{ message: string; id: number }> {
+  return apiRequest<{ message: string; id: number }>('/sponsors', {
     method: 'POST',
     body: sponsor,
   });
@@ -38,8 +39,10 @@ export async function updateSponsor(
   });
 }
 
-export async function deleteSponsor(id: number): Promise<void> {
-  await apiRequest(`/sponsors/${id}`, { method: 'DELETE' });
+export async function deleteSponsor(id: number): Promise<{ unlinkedPatterns: number }> {
+  return apiRequest<{ unlinkedPatterns: number }>(`/sponsors/${id}`, {
+    method: 'DELETE',
+  });
 }
 
 // Normalization API
@@ -52,10 +55,9 @@ export async function getNormalizations(): Promise<SponsorNormalization[]> {
 }
 
 export async function addNormalization(normalization: {
-  pattern: string;
-  replacement: string;
-  is_regex?: boolean;
-  priority?: number;
+  terms: string;
+  canonical: string;
+  category: NormalizationCategory;
 }): Promise<SponsorNormalization> {
   return apiRequest<SponsorNormalization>('/sponsors/normalizations', {
     method: 'POST',
@@ -66,11 +68,9 @@ export async function addNormalization(normalization: {
 export async function updateNormalization(
   id: number,
   updates: {
-    pattern?: string;
-    replacement?: string;
-    is_regex?: boolean;
-    priority?: number;
-    is_active?: boolean;
+    terms?: string;
+    canonical?: string;
+    category?: NormalizationCategory;
   }
 ): Promise<SponsorNormalization> {
   return apiRequest<SponsorNormalization>(`/sponsors/normalizations/${id}`, {

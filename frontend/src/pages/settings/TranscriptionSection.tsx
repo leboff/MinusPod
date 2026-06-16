@@ -1,6 +1,7 @@
 import { WHISPER_BACKENDS, type WhisperModel, type WhisperBackend, type WhisperApiConfig } from '../../api/types';
 import CollapsibleSection from '../../components/CollapsibleSection';
 import LanguageCombobox from '../../components/LanguageCombobox';
+import ToggleSwitch from '../../components/ToggleSwitch';
 import ProviderKeyField from './ProviderKeyField';
 import type { ProviderName, ProviderStatus, ProviderTestResult, ProvidersResponse } from '../../api/providers';
 
@@ -11,7 +12,7 @@ interface TranscriptionSectionProps {
   whisperBackend: WhisperBackend;
   onWhisperBackendChange: (backend: WhisperBackend) => void;
   apiConfig: WhisperApiConfig;
-  onApiConfigChange: (field: keyof WhisperApiConfig, value: string | boolean) => void;
+  onApiConfigChange: (field: keyof WhisperApiConfig, value: string) => void;
   providersState: ProvidersResponse | null;
   onProviderKeySave: (provider: ProviderName, apiKey: string) => Promise<void>;
   onProviderKeyClear: (provider: ProviderName) => Promise<void>;
@@ -20,6 +21,8 @@ interface TranscriptionSectionProps {
   onWhisperLanguageChange: (language: string) => void;
   whisperComputeType: string;
   onWhisperComputeTypeChange: (computeType: string) => void;
+  skipFlacCompression: boolean;
+  onSkipFlacCompressionChange: (value: boolean) => void;
   softTimeoutMinutes: number;
   hardTimeoutMinutes: number;
   softMinMinutes: number;
@@ -50,6 +53,8 @@ function TranscriptionSection({
   onWhisperLanguageChange,
   whisperComputeType,
   onWhisperComputeTypeChange,
+  skipFlacCompression,
+  onSkipFlacCompressionChange,
   softTimeoutMinutes,
   hardTimeoutMinutes,
   softMinMinutes,
@@ -156,26 +161,27 @@ function TranscriptionSection({
               </p>
             </div>
 
-            <div className="flex items-start gap-3">
-              <input
-                type="checkbox"
-                id="whisperApiSkipFlac"
-                checked={apiConfig.skipFlac}
-                onChange={(e) => onApiConfigChange('skipFlac', e.target.checked)}
-                className="mt-1 h-4 w-4 rounded border-input"
-              />
-              <div>
-                <label htmlFor="whisperApiSkipFlac" className="block text-sm font-medium text-foreground">
-                  Skip FLAC compression
-                </label>
-                <p className="mt-1 text-sm text-muted-foreground">
-                  Skip FLAC compression before upload. Enable for self-hosted Whisper servers
-                  (e.g. whisper.cpp on localhost) to avoid an extra encode pass.
-                </p>
-              </div>
-            </div>
           </>
         )}
+
+        <div className="pt-2 border-t border-border">
+          <label className="flex items-center gap-3 cursor-pointer">
+            <ToggleSwitch
+              checked={skipFlacCompression}
+              onChange={onSkipFlacCompressionChange}
+              ariaLabel={skipFlacCompression ? 'Skip FLAC compression enabled' : 'Skip FLAC compression disabled'}
+            />
+            <span className="text-sm font-medium text-foreground">
+              Skip FLAC compression
+            </span>
+          </label>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Upload the preprocessed WAV directly to the Whisper API instead of re-encoding to FLAC first.
+            Only applies when the Whisper backend is set to API. Useful for self-hosted Whisper servers
+            that accept uncompressed audio. Default off so that public OpenAI / OpenRouter endpoints
+            stay under their upload size limits.
+          </p>
+        </div>
 
         <div className="pt-2 border-t border-border">
           <label htmlFor="whisperLanguage" className="block text-sm font-medium text-foreground mb-2">

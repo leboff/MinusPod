@@ -1,14 +1,20 @@
 """
 Verification pass for ad detection.
 
-After the first pass detects and removes ads, this module re-transcribes
-the processed audio and runs detection again with a "what doesn't belong"
-prompt to catch missed ads. Returns dual timestamps: original-audio
-coordinates for UI/DB and processed-audio coordinates for cutting.
+After the first pass detects and removes ads, this module gets the processed
+transcript and runs detection again with a "what doesn't belong" prompt to
+catch missed ads. It normally re-transcribes the processed audio, but in
+LLM-only reprocess it maps the saved transcript through the cuts instead, so
+iterating on detection needs no transcription (issue #349). Returns dual
+timestamps: original-audio coordinates for UI/DB and processed-audio
+coordinates for cutting.
 """
 
 import logging
 from typing import Dict, List, Optional, Tuple
+
+from transcript_generator import TranscriptGenerator
+from utils.language import get_feed_language_override
 
 logger = logging.getLogger('podcast.verification')
 
@@ -40,7 +46,8 @@ class VerificationPass:
                podcast_description: str = None,
                skip_patterns: bool = False,
                progress_callback=None,
-               original_segments: List[Dict] = None) -> Dict:
+               original_segments: List[Dict] = None,
+               reuse_transcript: bool = False) -> Dict:
         """
         Run full pipeline on processed audio to find missed ads.
 
@@ -54,18 +61,44 @@ class VerificationPass:
             'segments': transcript segments from verification
             'status': 'clean', 'found_ads', 'no_segments', or 'transcription_failed'
         """
-        # Step 1: Re-transcribe processed audio
-        if progress_callback:
-            progress_callback("transcribing", 85)
-        logger.info(f"[{slug}:{episode_id}] Verification: Re-transcribing processed audio")
-        verification_segments = self._transcribe_verification(processed_audio_path, podcast_name)
+        # Step 1: Get verification segments.
+        if not pass1_cuts and original_segments:
+            # Pass 1 cut nothing, so the processed audio is identical to the
+            # original; reuse the transcript instead of re-transcribing (#349).
+            logger.info(
+                f"[{slug}:{episode_id}] Verification: reusing original transcript "
+                f"({len(original_segments)} segments, no pass 1 cuts)"
+            )
+            # Shallow copy so this matches the re-transcribe path (a fresh list)
+            # and downstream can't mutate the caller's segment list in place.
+            verification_segments = list(original_segments)
+        elif reuse_transcript and pass1_cuts and original_segments:
+            # LLM-only reprocess (#349): map the saved transcript through the
+            # applied cuts instead of re-transcribing the processed audio. The
+            # surviving audio is unchanged, so a re-transcription would yield the
+            # same words; only the segment boundaries differ. This is what makes
+            # LLM-only iteration transcription-free. The trade is that pass 2 can
+            # only re-examine what the saved transcript already captured -- it
+            # cannot surface an ad whose audio the transcript missed entirely.
+            verification_segments = TranscriptGenerator().compute_final_segments(
+                original_segments, pass1_cuts
+            )
+            logger.info(
+                f"[{slug}:{episode_id}] Verification: mapped saved transcript "
+                f"through {len(pass1_cuts)} cuts -> {len(verification_segments)} "
+                f"segments (no re-transcription, issue #349)"
+            )
+        else:
+            if progress_callback:
+                progress_callback("transcribing", 85)
+            logger.info(f"[{slug}:{episode_id}] Verification: Re-transcribing processed audio")
+            verification_segments = self._transcribe_verification(processed_audio_path, podcast_name, slug=slug)
 
         if not verification_segments:
-            logger.warning(f"[{slug}:{episode_id}] Verification: No segments from re-transcription")
+            logger.warning(f"[{slug}:{episode_id}] Verification: No segments")
             return {'ads': [], 'ads_processed': [], 'segments': [], 'status': 'no_segments'}
 
-        logger.info(f"[{slug}:{episode_id}] Verification: {len(verification_segments)} segments "
-                    f"from re-transcription")
+        logger.info(f"[{slug}:{episode_id}] Verification: {len(verification_segments)} segments")
 
         # Step 2: Audio analysis on processed audio
         if progress_callback:
@@ -78,6 +111,14 @@ class VerificationPass:
                            f"{len(processed_analysis.signals)} audio signals")
         except Exception as e:
             logger.warning(f"[{slug}:{episode_id}] Verification audio analysis failed: {e}")
+
+        # Audio cues (issue #350) found on the processed audio. The stat counter
+        # in processing only sees the pass-1 analysis, so surface this count so
+        # cues found here are not dropped from the dashboard total.
+        verification_cue_count = (
+            len(processed_analysis.get_signals_by_type('audio_cue'))
+            if processed_analysis else 0
+        )
 
         # Step 3: Claude detection with verification prompt + audio context
         if progress_callback:
@@ -93,7 +134,7 @@ class VerificationPass:
 
         if not processed_ads:
             return {'ads': [], 'ads_processed': [], 'segments': verification_segments,
-                    'status': 'clean'}
+                    'status': 'clean', 'audio_cue_count': verification_cue_count}
 
         # Tag all ads as verification stage
         for ad in processed_ads:
@@ -138,11 +179,13 @@ class VerificationPass:
             'ads': original_ads,
             'ads_processed': processed_ads,
             'segments': verification_segments,
-            'status': 'found_ads'
+            'status': 'found_ads',
+            'audio_cue_count': verification_cue_count,
         }
 
     def _transcribe_verification(self, audio_path: str,
-                                 podcast_name: str = None) -> List[Dict]:
+                                 podcast_name: str = None,
+                                 slug: str = None) -> List[Dict]:
         """Re-transcribe for verification using the shared Transcriber.
 
         Delegates to self.transcriber.transcribe_chunked() so episodes longer
@@ -153,7 +196,10 @@ class VerificationPass:
         Lets exceptions propagate to caller so status correctly reflects
         'transcription_failed' vs 'no_segments'.
         """
-        return self.transcriber.transcribe_chunked(audio_path, podcast_name)
+        language_override = get_feed_language_override(self.db, slug)
+        return self.transcriber.transcribe_chunked(
+            audio_path, podcast_name, language_override=language_override,
+        )
 
 
 def _build_timestamp_map(pass1_cuts: List[Dict]) -> List[Tuple[float, float]]:

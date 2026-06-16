@@ -1,5 +1,5 @@
 import { apiRequest, buildQueryString, csrfHeaders, extractErrorMessage } from './client';
-import { Feed, Episode, EpisodeDetail, BulkActionResult } from './types';
+import { Feed, Episode, EpisodeDetail, BulkActionResult, AdDistribution } from './types';
 
 
 export interface PeaksResponse {
@@ -80,6 +80,10 @@ export async function getFeed(slug: string): Promise<Feed> {
   return apiRequest<Feed>(`/feeds/${slug}`);
 }
 
+export async function getAdDistribution(slug: string): Promise<AdDistribution> {
+  return apiRequest<AdDistribution>(`/feeds/${slug}/ad-distribution`);
+}
+
 export async function addFeed(sourceUrl: string, slug?: string, autoProcessOverride?: boolean | null, maxEpisodes?: number, onlyExposeProcessedEpisodes?: boolean | null): Promise<Feed> {
   return apiRequest<Feed>('/feeds', {
     method: 'POST',
@@ -107,9 +111,12 @@ export async function refreshFeed(
   });
 }
 
-export async function refreshAllFeeds(): Promise<{ message: string }> {
+export async function refreshAllFeeds(
+  options?: { force?: boolean },
+): Promise<{ message: string }> {
   return apiRequest<{ message: string }>('/feeds/refresh', {
     method: 'POST',
+    body: options?.force ? { force: true } : undefined,
   });
 }
 
@@ -152,7 +159,7 @@ export async function getArtwork(slug: string): Promise<string> {
 export async function reprocessEpisode(
   slug: string,
   episodeId: string,
-  mode: 'reprocess' | 'full' = 'reprocess'
+  mode: 'reprocess' | 'full' | 'llm' = 'reprocess'
 ): Promise<{ message: string; mode: string }> {
   return apiRequest<{ message: string; mode: string }>(`/episodes/${slug}/${episodeId}/reprocess`, {
     method: 'POST',
@@ -165,6 +172,8 @@ export interface UpdateFeedPayload {
   daiPlatform?: string;
   networkIdOverride?: string | null;
   autoProcessOverride?: boolean | null;
+  languageOverride?: string | null;
+  titleOverride?: string | null;
   maxEpisodes?: number | null;
   onlyExposeProcessedEpisodes?: boolean | null;
 }
@@ -231,7 +240,7 @@ export interface ReprocessAllResult {
 
 export async function reprocessAllEpisodes(
   slug: string,
-  mode: 'reprocess' | 'full' = 'reprocess'
+  mode: 'reprocess' | 'full' | 'llm' = 'reprocess'
 ): Promise<ReprocessAllResult> {
   return apiRequest<ReprocessAllResult>(`/feeds/${slug}/reprocess-all`, {
     method: 'POST',
@@ -259,7 +268,7 @@ export async function regenerateChapters(
   );
 }
 
-export type BulkAction = 'process' | 'reprocess' | 'reprocess_full' | 'delete';
+export type BulkAction = 'process' | 'reprocess' | 'reprocess_full' | 'reprocess_llm' | 'delete';
 
 export async function bulkEpisodeAction(
   slug: string,

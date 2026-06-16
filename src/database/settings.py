@@ -10,6 +10,8 @@ logger = logging.getLogger(__name__)
 
 # Default pricing for known Anthropic models (USD per 1M tokens)
 DEFAULT_MODEL_PRICING = {
+    'claude-opus-4-8':            {'name': 'Claude Opus 4.8',   'input': 5.0,  'output': 25.0},
+    'claude-opus-4-7':            {'name': 'Claude Opus 4.7',   'input': 5.0,  'output': 25.0},
     'claude-opus-4-6':            {'name': 'Claude Opus 4.6',   'input': 5.0,  'output': 25.0},
     'claude-opus-4-5-20251101':   {'name': 'Claude Opus 4.5',   'input': 5.0,  'output': 25.0},
     'claude-opus-4-1-20250805':   {'name': 'Claude Opus 4.1',   'input': 15.0, 'output': 75.0},
@@ -95,15 +97,26 @@ class SettingsMixin:
         and also trips the plaintext-secret read warning.
         """
         # Import here to avoid circular import
-        from database import DEFAULT_SYSTEM_PROMPT, DEFAULT_VERIFICATION_PROMPT
+        from database import (
+            DEFAULT_SYSTEM_PROMPT, DEFAULT_VERIFICATION_PROMPT,
+            DEFAULT_REVIEW_PROMPT, DEFAULT_RESURRECT_PROMPT,
+        )
         from config import DEFAULT_AD_DETECTION_MODEL as DEFAULT_MODEL
         from chapters_generator import CHAPTERS_MODEL
-        from config import PROVIDER_ANTHROPIC
+        from config import PROVIDER_ANTHROPIC, STAGE_TUNABLE_DEFAULTS
         from llm_client import get_effective_provider
         from secrets_crypto import SECRET_SETTING_KEYS
 
         if key in SECRET_SETTING_KEYS:
             self.clear_secret(key)
+            return True
+
+        if key in STAGE_TUNABLE_DEFAULTS:
+            # Stage tunables resolve env > DB > default at read time. Clear the
+            # row (empty value, is_default=True) so that resolution takes over --
+            # mirrors the clear path in api.settings._apply_stage_tunables and
+            # avoids stringifying None for the reasoning budget/level defaults.
+            self.set_setting(key, "", is_default=True)
             return True
 
         # Provider-aware defaults for model settings
@@ -116,32 +129,29 @@ class SettingsMixin:
             model_default = DEFAULT_MODEL
             chapters_default = CHAPTERS_MODEL
 
-        # Env-backed keys (config.ENV_BACKED_SETTINGS) resolve their default from
-        # the live env var via env_backed_default(), so reset matches the value
-        # the schema initializer re-syncs on restart. Keys handled there:
-        # whisper_model, whisper_language, llm_provider, openai_base_url,
-        # processing_soft/hard_timeout_seconds, audio_bitrate.
-        from config import ENV_BACKED_KEYS, env_backed_default
-        if key in ENV_BACKED_KEYS:
-            self.set_setting(key, env_backed_default(key), is_default=True)
-            return True
-
         defaults = {
             'system_prompt': DEFAULT_SYSTEM_PROMPT,
             'verification_prompt': DEFAULT_VERIFICATION_PROMPT,
+            'review_prompt': DEFAULT_REVIEW_PROMPT,
+            'resurrect_prompt': DEFAULT_RESURRECT_PROMPT,
             'retention_period_minutes': os.environ.get('RETENTION_PERIOD', '1440'),
             'claude_model': model_default,
             'verification_model': model_default,
+            'whisper_model': os.environ.get('WHISPER_MODEL', 'small'),
             'vtt_transcripts_enabled': 'true',
             'chapters_enabled': 'true',
             'chapters_model': chapters_default,
+            'llm_provider': os.environ.get('LLM_PROVIDER', 'anthropic'),
+            'openai_base_url': os.environ.get('OPENAI_BASE_URL', 'http://localhost:8000/v1'),
             'min_cut_confidence': '0.80',
             'auto_process_enabled': 'true',
             'audio_bitrate': '128k',
+            'skip_flac_compression': os.environ.get('SKIP_FLAC_COMPRESSION', 'false'),
+            'ad_detection_parallel_windows': os.environ.get('AD_DETECTION_PARALLEL_WINDOWS', '4'),
+            'ad_reviewer_parallel_ads': os.environ.get('AD_REVIEWER_PARALLEL_ADS', '4'),
             'whisper_backend': os.environ.get('WHISPER_BACKEND', 'local'),
             'whisper_api_base_url': os.environ.get('WHISPER_API_BASE_URL', ''),
             'whisper_api_model': os.environ.get('WHISPER_API_MODEL', 'whisper-1'),
-            'whisper_api_skip_flac': os.environ.get('WHISPER_API_SKIP_FLAC', 'false'),
             'whisper_compute_type': os.environ.get('WHISPER_COMPUTE_TYPE', 'auto'),
             'vad_gap_detection_enabled': os.environ.get('VAD_GAP_DETECTION_ENABLED', 'true'),
             'vad_gap_start_min_seconds': os.environ.get('VAD_GAP_START_MIN_SECONDS', '3.0'),
@@ -175,15 +185,22 @@ class SettingsMixin:
             return None
 
     def set_secret(self, key: str, plaintext: str):
-        """Encrypt and store a secret. Requires provider crypto to be available.
-
-        No-ops through ``is_ciphertext`` so a request body that replays a
-        previously-emitted ciphertext (e.g. a UI round-trip with a masked
-        field) does not get double-wrapped.
-        """
+        """Encrypt and store a secret. An enc:v1: input (UI round-trip of a
+        masked field) is kept verbatim only if it decrypts under the current DEK;
+        otherwise it's treated as plaintext, so a bogus envelope can't be stored
+        as an undecryptable secret (creds-3)."""
         if is_ciphertext(plaintext):
-            self.set_setting(key, plaintext)
-            return
+            try:
+                decrypt(self, plaintext)  # verify it round-trips under our DEK
+                self.set_setting(key, plaintext)
+                return
+            except CryptoUnavailableError:
+                # Crypto not configured; can't verify or re-encrypt. Preserve
+                # the legacy behavior of storing the envelope verbatim.
+                self.set_setting(key, plaintext)
+                return
+            except Exception:
+                logger.warning("set_secret: enc:v1: value did not decrypt; treating as plaintext")
         self.set_setting(key, encrypt(self, plaintext))
 
     def clear_secret(self, key: str):
@@ -262,10 +279,13 @@ class SettingsMixin:
         ]
 
     def seed_default_pricing(self):
-        """Seed model_pricing from DEFAULT_MODEL_PRICING as fallback.
+        """Seed model_pricing from DEFAULT_MODEL_PRICING.
 
-        Called only when live fetch fails and table is empty.
-        Marks rows with source='default' so they get overwritten on next live fetch.
+        Used two ways: as the empty-table fallback when a live fetch fails, and
+        as a post-fetch backfill that fills gaps for known models the live source
+        has not published yet (e.g. a just-released Claude model). ON CONFLICT
+        DO NOTHING means existing rows are never touched. Rows are marked
+        source='default' so a later live fetch overwrites them via DO UPDATE.
         """
         conn = self.get_connection()
         inserted = 0

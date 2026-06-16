@@ -3,10 +3,10 @@ import { useSyncFromQuery } from '../hooks/useSyncFromQuery';
 import { useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { getSettings, updateSettings, resetSettings, resetPrompts, getModels, getWhisperModels, getSystemStatus, runCleanup, getProcessingEpisodes, cancelProcessing, refreshModels, getRetention, updateRetention, getProcessingTimeouts, updateProcessingTimeouts, getAudioSettings, updateAudioSettings } from '../api/settings';
+import { getReviewerSettings, updateReviewerSettings } from '../api/community';
 import { useAuth } from '../context/AuthContext';
 import LoadingSpinner from '../components/LoadingSpinner';
 import type { LlmProvider, WhisperBackend, WhisperApiConfig, UpdateSettingsPayload } from '../api/types';
-import { LLM_PROVIDERS } from '../api/types';
 
 import SystemStatusSection from './settings/SystemStatusSection';
 import StorageRetentionSection from './settings/StorageRetentionSection';
@@ -34,7 +34,8 @@ import GlobalDefaultsSection from './settings/GlobalDefaultsSection';
 import Podcasting20Section from './settings/Podcasting20Section';
 import PromptsSection from './settings/PromptsSection';
 import ExperimentsSection from './settings/ExperimentsSection';
-import AdReviewerSection from './settings/AdReviewerSection';
+import AudioCueDetectionSection from './settings/AudioCueDetectionSection';
+import PositionalPriorSection from './settings/PositionalPriorSection';
 import CommunityPatternsSection from './settings/CommunityPatternsSection';
 import { formatModelLabel } from './settings/settingsUtils';
 
@@ -55,32 +56,52 @@ function Settings() {
 
   const [systemPrompt, setSystemPrompt] = useState('');
   const [verificationPrompt, setVerificationPrompt] = useState('');
+  // Form state holds no hardcoded defaults: every field is hydrated from the
+  // loaded settings (or the backend-provided `settings.defaults.*`) before the
+  // form renders (the page returns a loader while `settingsLoading`, and the
+  // hydration block below runs in the render phase). These initializers are
+  // neutral placeholders that are never displayed.
   const [reviewer, setReviewer] = useState({
     enabled: false,
-    model: 'same_as_pass',
-    maxShift: 60,
+    model: '',
+    maxShift: 0,
     reviewPrompt: '',
     resurrectPrompt: '',
+    parallelAds: 0,
+    // From the separate /settings/reviewer endpoint (reviewerSettings query),
+    // merged into this section so the page Save persists everything together.
+    updatePatterns: true,
+    minTrimThreshold: 20,
   });
+  const [audioCue, setAudioCue] = useState({
+    enabled: false,
+    freqMinHz: 1500,
+    freqMaxHz: 8000,
+    prominenceDb: 9,
+    minConfidence: 0.8,
+  });
+  const [positionalPriorEnabled, setPositionalPriorEnabled] = useState(false);
   const [selectedModel, setSelectedModel] = useState('');
   const [verificationModel, setVerificationModel] = useState('');
   const [whisperModel, setWhisperModel] = useState('');
-  const [autoProcessEnabled, setAutoProcessEnabled] = useState(true);
-  const [maxFeedEpisodes, setMaxFeedEpisodes] = useState(300);
+  const [autoProcessEnabled, setAutoProcessEnabled] = useState(false);
+  const [maxFeedEpisodes, setMaxFeedEpisodes] = useState(0);
   const [onlyExposeProcessedDefault, setOnlyExposeProcessedDefault] = useState(false);
-  const [audioBitrate, setAudioBitrate] = useState('128k');
-  const [vttTranscriptsEnabled, setVttTranscriptsEnabled] = useState(true);
-  const [chaptersEnabled, setChaptersEnabled] = useState(true);
+  const [audioBitrate, setAudioBitrate] = useState('');
+  const [skipFlacCompression, setSkipFlacCompression] = useState(false);
+  const [vttTranscriptsEnabled, setVttTranscriptsEnabled] = useState(false);
+  const [chaptersEnabled, setChaptersEnabled] = useState(false);
   const [chaptersModel, setChaptersModel] = useState('');
-  const [minCutConfidence, setMinCutConfidence] = useState(0.80);
-  const [llmProvider, setLlmProvider] = useState<LlmProvider>(LLM_PROVIDERS.ANTHROPIC);
-  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('http://localhost:8000/v1');
-  const [whisperBackend, setWhisperBackend] = useState<WhisperBackend>('local');
+  const [minCutConfidence, setMinCutConfidence] = useState(0);
+  // Neutral placeholder (cast); replaced by hydration before the form renders.
+  const [llmProvider, setLlmProvider] = useState<LlmProvider>('' as LlmProvider);
+  const [openaiBaseUrl, setOpenaiBaseUrl] = useState('');
+  const [whisperBackend, setWhisperBackend] = useState<WhisperBackend>('' as WhisperBackend);
   const [whisperApiConfig, setWhisperApiConfig] = useState<WhisperApiConfig>({
-    baseUrl: '', model: 'whisper-1', skipFlac: false,
+    baseUrl: '', model: '',
   });
-  const [whisperLanguage, setWhisperLanguage] = useState('en');
-  const [whisperComputeType, setWhisperComputeType] = useState('auto');
+  const [whisperLanguage, setWhisperLanguage] = useState('');
+  const [whisperComputeType, setWhisperComputeType] = useState('');
   const [providersState, setProvidersState] = useState<ProvidersResponse | null>(null);
   const [providersError, setProvidersError] = useState<string | null>(null);
 
@@ -119,10 +140,19 @@ function Settings() {
     queryFn: getSettings,
   });
 
+  // The Ad Reviewer pattern-update toggle and trim threshold live on a
+  // separate endpoint but are surfaced in the same section; seeded into
+  // `reviewer` so the global Save writes them alongside the rest.
+  const { data: reviewerSettings } = useQuery({
+    queryKey: ['reviewerSettings'],
+    queryFn: getReviewerSettings,
+  });
+
   const { data: models, isLoading: modelsLoading } = useQuery({
     queryKey: ['models', llmProvider],
     queryFn: () => getModels(llmProvider),
-    enabled: !settingsLoading,
+    // Gate on llmProvider too: it is an empty placeholder until hydration runs.
+    enabled: !settingsLoading && !!llmProvider,
   });
 
   const { data: whisperModels } = useQuery({
@@ -189,6 +219,14 @@ function Settings() {
     setHardTimeoutMinutes(Math.round(t.hardTimeoutSeconds / 60));
   });
 
+  useSyncFromQuery(reviewerSettings, (rs) => {
+    setReviewer((prev) => ({
+      ...prev,
+      updatePatterns: rs.updatePatternsFromReviewerAdjustments,
+      minTrimThreshold: rs.minTrimThreshold,
+    }));
+  });
+
   useSyncFromQuery(audioSettings, (a) => {
     setKeepOriginalAudio(a.keepOriginalAudio);
   });
@@ -226,40 +264,66 @@ function Settings() {
     onError: (err: Error) => setTimeoutsError(err.message || 'Failed to save'),
   });
 
-  const [settingsSnapshot, setSettingsSnapshot] = useState(settings);
-  if (settings !== settingsSnapshot) {
+  // Skip re-seeding form fields from a settings refetch while the user has
+  // unsaved edits, or an immediate-save refetch (tunables/retention invalidate
+  // ['settings']) would clobber them (fe-settings-history-1).
+  // Hydrate the form from loaded settings. The snapshot starts undefined (not
+  // `settings`) so the first render after any (re)mount with cached query data
+  // re-hydrates -- otherwise `settings === settingsSnapshot` on remount and the
+  // form would show the neutral placeholders instead of the saved values (#323).
+  // The `!formDirty` guard still prevents a background refetch from clobbering
+  // unsaved edits. Defaults come from the backend `settings.defaults` block, not
+  // hardcoded literals; the hydration and computeChangedFields fallbacks MUST
+  // match (see fe-settings-history-1 / #234) or `hasChanges` never settles.
+  const [formDirty, setFormDirty] = useState(false);
+  const [settingsSnapshot, setSettingsSnapshot] = useState<typeof settings>(undefined);
+  if (settings && settings !== settingsSnapshot) {
     setSettingsSnapshot(settings);
-    if (settings) {
+    if (!formDirty) {
+      const d = settings.defaults;
       setSystemPrompt(settings.systemPrompt?.value || '');
       setVerificationPrompt(settings.verificationPrompt?.value || '');
-      setReviewer({
-        enabled: settings.enableAdReview?.value ?? false,
-        model: settings.reviewModel?.value || 'same_as_pass',
-        maxShift: settings.reviewMaxBoundaryShift?.value ?? 60,
+      // Spread prev so the pattern-update fields seeded from the separate
+      // reviewerSettings query (see useSyncFromQuery below) are preserved.
+      setReviewer((prev) => ({
+        ...prev,
+        enabled: settings.enableAdReview?.value ?? d.enableAdReview,
+        model: settings.reviewModel?.value || d.reviewModel,
+        maxShift: settings.reviewMaxBoundaryShift?.value ?? d.reviewMaxBoundaryShift,
         reviewPrompt: settings.reviewPrompt?.value || '',
         resurrectPrompt: settings.resurrectPrompt?.value || '',
-      });
+        parallelAds: settings.adReviewerParallelAds?.value ?? d.adReviewerParallelAds,
+      }));
       setSelectedModel(settings.claudeModel?.value || '');
       setVerificationModel(settings.verificationModel?.value || '');
-      setWhisperModel(settings.whisperModel?.value || 'small');
-      setAutoProcessEnabled(settings.autoProcessEnabled?.value ?? true);
-      setMaxFeedEpisodes(settings.maxFeedEpisodes?.value ?? 300);
-      setOnlyExposeProcessedDefault(settings.onlyExposeProcessedDefault?.value ?? false);
-      setAudioBitrate(settings.audioBitrate?.value || '128k');
-      setVttTranscriptsEnabled(settings.vttTranscriptsEnabled?.value ?? true);
-      setChaptersEnabled(settings.chaptersEnabled?.value ?? true);
+      setWhisperModel(settings.whisperModel?.value || d.whisperModel);
+      setAutoProcessEnabled(settings.autoProcessEnabled?.value ?? d.autoProcessEnabled);
+      setMaxFeedEpisodes(settings.maxFeedEpisodes?.value ?? d.maxFeedEpisodes);
+      setOnlyExposeProcessedDefault(settings.onlyExposeProcessedDefault?.value ?? d.onlyExposeProcessedDefault);
+      setAudioBitrate(settings.audioBitrate?.value || d.audioBitrate);
+      setSkipFlacCompression(settings.skipFlacCompression?.value ?? d.skipFlacCompression);
+      setAudioCue({
+        enabled: settings.audioCueDetectionEnabled?.value ?? d.audioCueDetectionEnabled,
+        freqMinHz: settings.audioCueFreqMinHz?.value ?? d.audioCueFreqMinHz,
+        freqMaxHz: settings.audioCueFreqMaxHz?.value ?? d.audioCueFreqMaxHz,
+        prominenceDb: settings.audioCueProminenceDb?.value ?? d.audioCueProminenceDb,
+        minConfidence: settings.audioCueMinConfidence?.value ?? d.audioCueMinConfidence,
+      });
+      setPositionalPriorEnabled(
+        settings.positionalPriorEnabled?.value ?? d.positionalPriorEnabled);
+      setVttTranscriptsEnabled(settings.vttTranscriptsEnabled?.value ?? d.vttTranscriptsEnabled);
+      setChaptersEnabled(settings.chaptersEnabled?.value ?? d.chaptersEnabled);
       setChaptersModel(settings.chaptersModel?.value || '');
-      setMinCutConfidence(settings.minCutConfidence?.value ?? 0.80);
-      setLlmProvider((settings.llmProvider?.value || LLM_PROVIDERS.ANTHROPIC) as LlmProvider);
-      setOpenaiBaseUrl(settings.openaiBaseUrl?.value || 'http://localhost:8000/v1');
-      setWhisperBackend((settings.whisperBackend?.value || 'local') as WhisperBackend);
+      setMinCutConfidence(settings.minCutConfidence?.value ?? d.minCutConfidence);
+      setLlmProvider((settings.llmProvider?.value || d.llmProvider) as LlmProvider);
+      setOpenaiBaseUrl(settings.openaiBaseUrl?.value || d.openaiBaseUrl);
+      setWhisperBackend((settings.whisperBackend?.value || d.whisperBackend) as WhisperBackend);
       setWhisperApiConfig({
         baseUrl: settings.whisperApiBaseUrl?.value || '',
-        model: settings.whisperApiModel?.value || 'whisper-1',
-        skipFlac: settings.whisperApiSkipFlac?.value ?? false,
+        model: settings.whisperApiModel?.value || d.whisperApiModel,
       });
-      setWhisperLanguage(settings.whisperLanguage?.value || 'en');
-      setWhisperComputeType(settings.whisperComputeType?.value || 'auto');
+      setWhisperLanguage(settings.whisperLanguage?.value || d.whisperLanguage);
+      setWhisperComputeType(settings.whisperComputeType?.value || d.whisperComputeType);
     }
   }
 
@@ -271,38 +335,43 @@ function Settings() {
   // copied into local state. Caller must verify settings is non-null.
   // String fields use || (treat empty string as "fall back to default");
   // boolean and numeric fields use ?? (false and 0 are meaningful values).
-  // audioBitrate's default isn't in settings.defaults so it stays inline.
+  // Defaults come from settings.defaults; these MUST match the hydration block.
   const computeChangedFields = (): UpdateSettingsPayload => {
     if (!settings) return {};
     const d = settings.defaults;
     const payload: UpdateSettingsPayload = {};
 
     // Compare against the SAME fallback the hydration block used (see
-    // setSystemPrompt / setSelectedModel etc above). Falling back to
-    // settings.defaults here when the hydration falls back to '' means a
-    // server-stored empty string differs from the defaults-derived value,
-    // hasChanges flips permanently true, and Save Changes never goes away
-    // (issue #234 follow-up).
+    // setSystemPrompt / setSelectedModel etc above). If the two diverge, a
+    // server-stored value differs from the defaults-derived value, hasChanges
+    // flips permanently true, and Save Changes never goes away (#234 follow-up).
     if (systemPrompt !== (settings.systemPrompt?.value || '')) payload.systemPrompt = systemPrompt;
     if (verificationPrompt !== (settings.verificationPrompt?.value || '')) payload.verificationPrompt = verificationPrompt;
     if (reviewer.reviewPrompt !== (settings.reviewPrompt?.value || '')) payload.reviewPrompt = reviewer.reviewPrompt;
     if (reviewer.resurrectPrompt !== (settings.resurrectPrompt?.value || '')) payload.resurrectPrompt = reviewer.resurrectPrompt;
     if (reviewer.enabled !== (settings.enableAdReview?.value ?? d.enableAdReview)) payload.enableAdReview = reviewer.enabled;
-    if (reviewer.model !== (settings.reviewModel?.value || 'same_as_pass')) payload.reviewModel = reviewer.model;
+    if (reviewer.model !== (settings.reviewModel?.value || d.reviewModel)) payload.reviewModel = reviewer.model;
     if (reviewer.maxShift !== (settings.reviewMaxBoundaryShift?.value ?? d.reviewMaxBoundaryShift)) payload.reviewMaxBoundaryShift = reviewer.maxShift;
+    if (reviewer.parallelAds !== (settings.adReviewerParallelAds?.value ?? d.adReviewerParallelAds)) payload.adReviewerParallelAds = reviewer.parallelAds;
+    if (audioCue.enabled !== (settings.audioCueDetectionEnabled?.value ?? d.audioCueDetectionEnabled)) payload.audioCueDetectionEnabled = audioCue.enabled;
+    if (audioCue.freqMinHz !== (settings.audioCueFreqMinHz?.value ?? d.audioCueFreqMinHz)) payload.audioCueFreqMinHz = audioCue.freqMinHz;
+    if (audioCue.freqMaxHz !== (settings.audioCueFreqMaxHz?.value ?? d.audioCueFreqMaxHz)) payload.audioCueFreqMaxHz = audioCue.freqMaxHz;
+    if (audioCue.prominenceDb !== (settings.audioCueProminenceDb?.value ?? d.audioCueProminenceDb)) payload.audioCueProminenceDb = audioCue.prominenceDb;
+    if (audioCue.minConfidence !== (settings.audioCueMinConfidence?.value ?? d.audioCueMinConfidence)) payload.audioCueMinConfidence = audioCue.minConfidence;
+    if (positionalPriorEnabled !== (settings.positionalPriorEnabled?.value ?? d.positionalPriorEnabled)) payload.positionalPriorEnabled = positionalPriorEnabled;
     if (selectedModel !== (settings.claudeModel?.value || '')) payload.claudeModel = selectedModel;
     if (verificationModel !== (settings.verificationModel?.value || '')) payload.verificationModel = verificationModel;
-    if (whisperModel !== (settings.whisperModel?.value || 'small')) payload.whisperModel = whisperModel;
+    if (whisperModel !== (settings.whisperModel?.value || d.whisperModel)) payload.whisperModel = whisperModel;
     if (chaptersModel !== (settings.chaptersModel?.value || '')) payload.chaptersModel = chaptersModel;
-    if (llmProvider !== (settings.llmProvider?.value || LLM_PROVIDERS.ANTHROPIC)) payload.llmProvider = llmProvider;
-    if (openaiBaseUrl !== (settings.openaiBaseUrl?.value || 'http://localhost:8000/v1')) payload.openaiBaseUrl = openaiBaseUrl;
-    if (whisperBackend !== (settings.whisperBackend?.value || 'local')) payload.whisperBackend = whisperBackend;
+    if (llmProvider !== (settings.llmProvider?.value || d.llmProvider)) payload.llmProvider = llmProvider;
+    if (openaiBaseUrl !== (settings.openaiBaseUrl?.value || d.openaiBaseUrl)) payload.openaiBaseUrl = openaiBaseUrl;
+    if (whisperBackend !== (settings.whisperBackend?.value || d.whisperBackend)) payload.whisperBackend = whisperBackend;
     if (whisperApiConfig.baseUrl !== (settings.whisperApiBaseUrl?.value || '')) payload.whisperApiBaseUrl = whisperApiConfig.baseUrl;
-    if (whisperApiConfig.model !== (settings.whisperApiModel?.value || 'whisper-1')) payload.whisperApiModel = whisperApiConfig.model;
-    if (whisperApiConfig.skipFlac !== (settings.whisperApiSkipFlac?.value ?? false)) payload.whisperApiSkipFlac = whisperApiConfig.skipFlac;
-    if (whisperLanguage !== (settings.whisperLanguage?.value || 'en')) payload.whisperLanguage = whisperLanguage;
-    if (whisperComputeType !== (settings.whisperComputeType?.value || 'auto')) payload.whisperComputeType = whisperComputeType;
-    if (audioBitrate !== (settings.audioBitrate?.value || '128k')) payload.audioBitrate = audioBitrate;
+    if (whisperApiConfig.model !== (settings.whisperApiModel?.value || d.whisperApiModel)) payload.whisperApiModel = whisperApiConfig.model;
+    if (whisperLanguage !== (settings.whisperLanguage?.value || d.whisperLanguage)) payload.whisperLanguage = whisperLanguage;
+    if (whisperComputeType !== (settings.whisperComputeType?.value || d.whisperComputeType)) payload.whisperComputeType = whisperComputeType;
+    if (audioBitrate !== (settings.audioBitrate?.value || d.audioBitrate)) payload.audioBitrate = audioBitrate;
+    if (skipFlacCompression !== (settings.skipFlacCompression?.value ?? d.skipFlacCompression)) payload.skipFlacCompression = skipFlacCompression;
 
     if (autoProcessEnabled !== (settings.autoProcessEnabled?.value ?? d.autoProcessEnabled)) payload.autoProcessEnabled = autoProcessEnabled;
     if (onlyExposeProcessedDefault !== (settings.onlyExposeProcessedDefault?.value ?? d.onlyExposeProcessedDefault)) payload.onlyExposeProcessedDefault = onlyExposeProcessedDefault;
@@ -314,34 +383,76 @@ function Settings() {
     return payload;
   };
 
+  // The two pattern-update fields save via /settings/reviewer, not the main
+  // ad-detection PUT, so they are diffed separately from computeChangedFields.
+  const reviewerPatternsChanged = () => {
+    if (!reviewerSettings) return false;
+    return reviewer.updatePatterns !== reviewerSettings.updatePatternsFromReviewerAdjustments
+      || reviewer.minTrimThreshold !== reviewerSettings.minTrimThreshold;
+  };
+
   const hasChanges = useMemo(() => {
     if (!settings) return false;
     if (Object.keys(computeChangedFields()).length > 0) return true;
+    if (reviewerPatternsChanged()) return true;
     return podcastIndexApiKey !== '' && podcastIndexApiSecret !== '';
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [systemPrompt, verificationPrompt, reviewer, selectedModel, verificationModel, whisperModel, autoProcessEnabled, maxFeedEpisodes, onlyExposeProcessedDefault, audioBitrate, vttTranscriptsEnabled, chaptersEnabled, chaptersModel, minCutConfidence, llmProvider, openaiBaseUrl, whisperBackend, whisperApiConfig.baseUrl, whisperApiConfig.model, whisperApiConfig.skipFlac, whisperLanguage, whisperComputeType, podcastIndexApiKey, podcastIndexApiSecret, settings]);
+  }, [systemPrompt, verificationPrompt, reviewer, audioCue, positionalPriorEnabled, selectedModel, verificationModel, whisperModel, autoProcessEnabled, maxFeedEpisodes, onlyExposeProcessedDefault, audioBitrate, skipFlacCompression, vttTranscriptsEnabled, chaptersEnabled, chaptersModel, minCutConfidence, llmProvider, openaiBaseUrl, whisperBackend, whisperApiConfig.baseUrl, whisperApiConfig.model, whisperLanguage, whisperComputeType, podcastIndexApiKey, podcastIndexApiSecret, settings, reviewerSettings]);
+
+  // Mirror hasChanges into render-readable state so the hydration guard above
+  // (which runs before hasChanges is defined) skips re-seeding while dirty.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
+  useEffect(() => { setFormDirty(hasChanges); }, [hasChanges]);
 
   const updateMutation = useMutation({
-    mutationFn: () => {
+    mutationFn: async () => {
       if (!settings) throw new Error('Settings not loaded yet');
       const payload = computeChangedFields();
       if (podcastIndexApiKey) payload.podcastIndexApiKey = podcastIndexApiKey;
       if (podcastIndexApiSecret) payload.podcastIndexApiSecret = podcastIndexApiSecret;
-      return updateSettings(payload);
+      const tasks: Promise<unknown>[] = [];
+      // Skip the main PUT when nothing in its payload changed (e.g. only the
+      // reviewer-pattern fields are dirty) to avoid a no-op request.
+      if (Object.keys(payload).length > 0) tasks.push(updateSettings(payload));
+      if (reviewerPatternsChanged()) {
+        tasks.push(updateReviewerSettings({
+          updatePatternsFromReviewerAdjustments: reviewer.updatePatterns,
+          minTrimThreshold: reviewer.minTrimThreshold,
+        }));
+      }
+      await Promise.all(tasks);
     },
     onSuccess: () => {
       setPodcastIndexApiKey('');
       setPodcastIndexApiSecret('');
+    },
+    // onSettled (not onSuccess) so a partial failure across the two writes
+    // still re-hydrates the form from server truth instead of leaving stale
+    // local state next to a write that did land.
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
       queryClient.invalidateQueries({ queryKey: ['models'] });
+      queryClient.invalidateQueries({ queryKey: ['reviewerSettings'] });
     },
   });
 
-  // Per-stage tunables save immediately rather than waiting for the global Save
-  // button: each field is independent and users tweak them iteratively.
+  // Single-field tunable saves (e.g. Ollama context window) commit immediately.
   const tunableMutation = useMutation({
     mutationFn: (payload: UpdateSettingsPayload) => updateSettings(payload),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['settings'] });
+    },
+  });
+
+  // The LLM Tunables section batches all its field edits behind one explicit
+  // Save button; its own mutation keeps the Saving/Saved state scoped to that
+  // section rather than flashing on unrelated single-field saves.
+  const stageTunablesMutation = useMutation({
+    mutationFn: (payload: UpdateSettingsPayload) => updateSettings(payload),
+    // onSettled (not onSuccess): the PUT applies fields in phases and commits
+    // each as it goes, so a 400 on a later field can still leave an earlier one
+    // written. Re-hydrate on both outcomes so the section reflects what landed.
+    onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ['settings'] });
     },
   });
@@ -479,7 +590,12 @@ function Settings() {
           tunables={settings.stageTunables}
           defaults={settings.stageTunableDefaults}
           llmProvider={llmProvider}
-          onUpdate={(payload) => tunableMutation.mutate(payload)}
+          onSave={(payload) => stageTunablesMutation.mutate(payload)}
+          saveIsPending={stageTunablesMutation.isPending}
+          saveIsSuccess={stageTunablesMutation.isSuccess}
+          saveError={stageTunablesMutation.error ? (stageTunablesMutation.error as Error).message : null}
+          parallelWindows={settings.adDetectionParallelWindows?.value ?? settings.defaults?.adDetectionParallelWindows ?? 4}
+          parallelWindowsDefault={settings.defaults?.adDetectionParallelWindows ?? 4}
         />
       )}
 
@@ -501,6 +617,8 @@ function Settings() {
         onWhisperLanguageChange={setWhisperLanguage}
         whisperComputeType={whisperComputeType}
         onWhisperComputeTypeChange={setWhisperComputeType}
+        skipFlacCompression={skipFlacCompression}
+        onSkipFlacCompressionChange={setSkipFlacCompression}
         softTimeoutMinutes={softTimeoutMinutes}
         hardTimeoutMinutes={hardTimeoutMinutes}
         softMinMinutes={processingTimeouts ? Math.max(1, Math.ceil(processingTimeouts.limits.softMin / 60)) : 5}
@@ -530,8 +648,6 @@ function Settings() {
         resetIsPending={resetPromptsMutation.isPending}
       />
 
-      <AdReviewerSection />
-
       <CommunityPatternsSection />
 
       <SettingsGroupHeader title="Experiments" />
@@ -542,6 +658,13 @@ function Settings() {
         onResetPrompts={() => resetPromptsMutation.mutate()}
         resetIsPending={resetPromptsMutation.isPending}
         modelOptions={models?.map((m) => ({ id: m.id, label: formatModelLabel(m) })) ?? []}
+      />
+
+      <AudioCueDetectionSection audioCue={audioCue} onChange={setAudioCue} />
+
+      <PositionalPriorSection
+        enabled={positionalPriorEnabled}
+        onChange={setPositionalPriorEnabled}
       />
 
       <SettingsGroupHeader title="Output" />

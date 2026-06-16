@@ -173,3 +173,36 @@ Open an issue on the main MinusPod repo if:
 - A pattern was incorrectly rejected as a duplicate
 
 This document evolves with the project.
+
+-----
+
+## Filename rules
+
+Per-pattern files MUST be named `<slug>-<short_uuid>.json`, where:
+
+- `<slug>` is the lowercased, hyphen-joined version of the `sponsor` field
+  (e.g. `Shopify` -> `shopify`, `TD Bank` -> `td-bank`, `Hims.com` -> `hims-com`).
+- `<short_uuid>` is the first 8-char segment of `community_id`
+  (e.g. `community_id: "07df78ed-..."` -> `07df78ed`).
+
+The PR validator hard-rejects mismatches because the filename is the only
+hint a reviewer browsing `patterns/community/` has about what a file
+contains. If a contributor edits the `sponsor` field after export, the file
+must be renamed too.
+
+Bundle files (`format: "minuspod-community-submission"`) follow the
+`minuspod-submission-<id>.json` convention instead. The validator warns
+when these two shapes are mixed up.
+
+## Variant truncation warnings
+
+The validator also warns when an `intro_variants` or `outro_variants` entry
+looks cut mid-clause: it ends in a stopword like `the`, `at`, `and`, `com`,
+`slash`, `to`, or in a bare single letter other than `i`. A URL tail like
+`shopify dot com` is exempt and does not warn.
+
+Warnings are advisory, not rejections. Variants are recall boosters; a fragment
+that never matches anything just clutters the pattern. To clear a warning,
+trim the variant to its anchor noun, drop it, or extend it past the truncation
+point. If the variant ends in a smart quote or ellipsis from a Whisper
+transcript, the validator strips those before checking.

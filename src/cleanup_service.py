@@ -342,8 +342,9 @@ class CleanupService:
         try:
             conn = self.db.get_connection()
             conn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
-            # VACUUM must be run outside a transaction
-            conn.execute("VACUUM")
+            # Reuse the maintenance VACUUM, which clears isolation_level so the
+            # default transaction doesn't block it (db-maintenance-3).
+            self.db.vacuum()
             logger.info("Database VACUUM + WAL checkpoint completed")
         except Exception as e:
             logger.error(f"VACUUM failed: {e}")

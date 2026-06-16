@@ -529,6 +529,61 @@ class EpisodeMixin:
         conn.commit()
         logger.debug(f"[{slug}:{episode_id}] Cleared episode details from database")
 
+    def clear_episode_ad_data(self, slug: str, episode_id: str):
+        """Clear ad-detection outputs and regenerated assets while PRESERVING
+        the transcript inputs (issue #349 LLM-only reprocess).
+
+        Nulls the columns the ad-detection and cut stages regenerate (ad
+        markers, both LLM passes, chapters, VTT, post-cut segments) but keeps
+        ``transcript_text``, ``original_transcript_text`` and
+        ``original_segments_json`` so ``_download_and_transcribe`` reuses the
+        saved transcript and skips the expensive re-transcription. Unlike
+        ``clear_episode_details`` this UPDATEs to NULL rather than DELETEing the
+        row, so the transcript is never lost.
+        """
+        conn = self.get_connection()
+
+        db_episode_id = self._get_episode_db_id(slug, episode_id)
+        if not db_episode_id:
+            return
+
+        conn.execute(
+            """UPDATE episode_details
+               SET ad_markers_json = NULL,
+                   first_pass_prompt = NULL,
+                   first_pass_response = NULL,
+                   second_pass_prompt = NULL,
+                   second_pass_response = NULL,
+                   chapters_json = NULL,
+                   transcript_vtt = NULL,
+                   final_segments_json = NULL
+               WHERE episode_id = ?""",
+            (db_episode_id,)
+        )
+        conn.commit()
+        logger.debug(
+            f"[{slug}:{episode_id}] Cleared ad-detection data "
+            f"(transcript preserved) from database"
+        )
+
+    def has_transcript(self, slug: str, episode_id: str) -> bool:
+        """True if a non-empty transcript is saved for the episode, without
+        loading the transcript blob. Gates LLM-only reprocess (#349); cheaper
+        than ``storage.get_transcript`` which fetches the full text. The
+        ``!= ''`` check matches ``storage.get_transcript``'s truthiness
+        semantics so the guard and the transcript-reuse path agree."""
+        db_episode_id = self._get_episode_db_id(slug, episode_id)
+        if not db_episode_id:
+            return False
+        conn = self.get_connection()
+        row = conn.execute(
+            "SELECT 1 FROM episode_details "
+            "WHERE episode_id = ? AND transcript_text IS NOT NULL "
+            "AND transcript_text != '' LIMIT 1",
+            (db_episode_id,)
+        ).fetchone()
+        return row is not None
+
     def reset_episode_status(self, slug: str, episode_id: str):
         """Reset episode status to pending for reprocessing."""
         conn = self.get_connection()
@@ -578,6 +633,32 @@ class EpisodeMixin:
         )
         return [dict(row) for row in cursor.fetchall()]
 
+    def get_recent_episode_ad_history(self, slug: str,
+                                      exclude_episode_id: Optional[str] = None,
+                                      limit: int = 30,
+                                      min_duration: float = 60) -> List[Dict]:
+        """Get recent processed episodes' ad markers for positional prior learning.
+
+        Returns newest-first rows with episode_id, original_duration and the raw
+        ad_markers_json. Episodes at or under min_duration seconds
+        (trailers/bonus clips) are excluded.
+        """
+        conn = self.get_connection()
+        cursor = conn.execute(
+            """SELECT e.episode_id, e.original_duration, ed.ad_markers_json
+               FROM episodes e
+               JOIN podcasts p ON e.podcast_id = p.id
+               JOIN episode_details ed ON ed.episode_id = e.id
+               WHERE p.slug = ? AND e.status = 'processed'
+                     AND e.episode_id != COALESCE(?, '')
+                     AND e.original_duration > ?
+                     AND ed.ad_markers_json IS NOT NULL
+               ORDER BY COALESCE(e.published_at, e.created_at) DESC
+               LIMIT ?""",
+            (slug, exclude_episode_id, min_duration, limit)
+        )
+        return [dict(row) for row in cursor.fetchall()]
+
     def get_episodes_by_ids(self, slug: str, episode_ids: List[str]) -> List[Dict]:
         """Get multiple episodes by slug and episode_ids in a single query."""
         if not episode_ids:
@@ -605,6 +686,34 @@ class EpisodeMixin:
         placeholders = ','.join('?' for _ in db_ids)
         conn.execute(
             f"DELETE FROM episode_details WHERE episode_id IN ({placeholders})",
+            db_ids
+        )
+        conn.commit()
+
+    def batch_clear_episode_ad_data(self, slug: str, episode_ids: List[str]) -> None:
+        """Clear ad-detection outputs for multiple episodes while PRESERVING
+        their transcripts (issue #349 LLM-only bulk reprocess). UPDATE-to-NULL
+        mirror of ``batch_clear_episode_details``; see ``clear_episode_ad_data``
+        for the per-column rationale."""
+        if not episode_ids:
+            return
+        episodes = self.get_episodes_by_ids(slug, episode_ids)
+        if not episodes:
+            return
+        db_ids = [ep['id'] for ep in episodes]
+        conn = self.get_connection()
+        placeholders = ','.join('?' for _ in db_ids)
+        conn.execute(
+            f"""UPDATE episode_details
+                SET ad_markers_json = NULL,
+                    first_pass_prompt = NULL,
+                    first_pass_response = NULL,
+                    second_pass_prompt = NULL,
+                    second_pass_response = NULL,
+                    chapters_json = NULL,
+                    transcript_vtt = NULL,
+                    final_segments_json = NULL
+                WHERE episode_id IN ({placeholders})""",
             db_ids
         )
         conn.commit()
@@ -647,6 +756,19 @@ class EpisodeMixin:
 
         podcast_id = podcast['id']
         inserted = 0
+
+        # Snapshot existing GUIDs so we can count real inserts. SQLite's
+        # cursor.rowcount is 1 for both the INSERT and the UPDATE branch of
+        # an UPSERT (and even for an UPDATE that sets every column to its
+        # current value), so it cannot distinguish "new" from "re-touched".
+        # The downstream log line "Discovered N new episode(s)" needs the
+        # real new-row count, not the upsert-touched count.
+        existing_ids = {
+            row['episode_id'] for row in conn.execute(
+                "SELECT episode_id FROM episodes WHERE podcast_id = ?",
+                (podcast_id,),
+            ).fetchall()
+        }
 
         for ep in episodes:
             iso_published = normalize_published_at(ep.get('published', '')) or None
@@ -707,8 +829,9 @@ class EpisodeMixin:
                         tags_json,
                     )
                 )
-                if cursor.rowcount > 0:
+                if cursor.rowcount > 0 and ep['id'] not in existing_ids:
                     inserted += 1
+                    existing_ids.add(ep['id'])
             except Exception as e:
                 logger.warning(f"Failed to upsert discovered episode {ep.get('id')}: {e}")
 

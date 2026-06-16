@@ -19,7 +19,7 @@ Grouped by how often you'll touch them. **Standard** is what a typical deploymen
 | `OPENROUTER_BASE_URL` | `https://openrouter.ai/api/v1` | OpenRouter API base URL. Override for private proxies or regional endpoints. |
 | `ANTHROPIC_BASE_URL` | _(anthropic default)_ | Anthropic API base URL. Override for private proxies. |
 | `OPENAI_API_KEY` | `not-needed` | API key for OpenAI-compatible endpoint (not required for Ollama or local wrappers) |
-| `OPENAI_MODEL` | _(none)_ | Model for OpenAI-compatible/Ollama providers. **Required for Ollama** (e.g. `qwen3:14b`). Defaults to `claude-sonnet-4-5-20250929` for openai-compatible if unset. |
+| `OPENAI_MODEL` | _(none)_ | Seed model for OpenAI-compatible/Ollama/OpenRouter providers. **Required for Ollama** (e.g. `qwen3:14b`). Defaults to `claude-sonnet-4-5-20250929` for openai-compatible if unset. Seed-only: read once on first startup; after that the stored value wins, so change the model in the Settings UI. There is no `LLM_MODEL` variable. |
 | `BASE_URL` | `http://localhost:8000` | Public URL for generated feed links |
 | `UI_BASE_URL` | _(falls back to BASE_URL)_ | Public URL for UI links in webhooks (set if UI is on a different domain than feeds) |
 | `WHISPER_MODEL` | `small` | Whisper model size. `tiny`, `base`, `small`, `medium`, `large-v3`, `turbo`, plus `.en` variants |
@@ -51,6 +51,7 @@ Grouped by how often you'll touch them. **Standard** is what a typical deploymen
 | `SESSION_COOKIE_SAMESITE` | `Strict` | Override to `Lax` only if a specific integration breaks. |
 | `MINUSPOD_ENABLE_HSTS` | `false` | Set to `true` once the deployment is HTTPS-only. HSTS traps browsers so don't flip this on a dual-protocol setup. |
 | `MINUSPOD_TRUSTED_PROXY_COUNT` | `0` | Reverse-proxy hops to trust when reading `X-Forwarded-For`. `1` behind Cloudflare / cloudflared / nginx / Traefik, higher for a multi-proxy chain. **Leaving this at `0` behind a proxy breaks login lockout** (the proxy IP is private/loopback, which the lockout excludes) and per-IP rate limits (they key on the proxy instead of the client); audit logs + auth-failure webhooks also carry the wrong IP. Startup logs a WARN when unset. |
+| `MINUSPOD_ALLOW_PRIVATE_FEED_HOSTS` | `false` | Allow RSS feed sources on private / loopback / LAN hosts. Off by default: feed URLs are untrusted and validated with the strict SSRF tier (DNS-resolved, private/metadata blocked) so a stored URL can't be rebound to an internal address on refresh. Set `true` only if you serve a feed from a private address (e.g. a LAN Audiobookshelf). |
 
 ### Advanced
 
@@ -65,11 +66,14 @@ Grouped by how often you'll touch them. **Standard** is what a typical deploymen
 | `RATE_LIMIT_STORAGE_URI` | `memory://` | Flask-limiter storage backend. Default is per-worker; set to `redis://host:6379` + run a Redis sidecar for exact declared limits across workers. |
 | `APP_UID` | `1000` | UID gunicorn runs as inside the container. Override to match host volume ownership. |
 | `APP_GID` | `1000` | GID counterpart to `APP_UID`. |
+| `GUNICORN_BIND` | `0.0.0.0:8000` | Listen address. Accepts a comma-separated list for multiple sockets. For dual-stack on rootless Podman, use `[::]:8000` -- one IPv6 wildcard also accepts IPv4 when the kernel keeps `bindv6only=0` (the default). Do not list both `0.0.0.0:8000` and `[::]:8000` on such a kernel; the second bind fails with `EADDRINUSE` and gunicorn exits. |
+| `MINUSPOD_PORT` | `8000` | Port for the default listen address (`0.0.0.0:$MINUSPOD_PORT`). Handy for `network_mode: host` or running several instances on one host without a port-mapping conflict. Ignored when `GUNICORN_BIND` is set, which takes precedence. The container `EXPOSE` stays at `8000` (build-time metadata only); the actual listen port follows this var. |
 | `GUNICORN_WORKERS` | `2` | Worker count. Lower means single-threaded UI blocking during RSS refresh; higher multiplies per-worker rate-limit counters (when using `memory://`). |
 | `GUNICORN_TIMEOUT` | `600` | Per-request hard timeout. |
 | `GUNICORN_GRACEFUL_TIMEOUT` | `330` | Seconds between SIGTERM and SIGKILL on shutdown. |
 | `SECRET_KEY` | _(auto-generated)_ | Flask session signing key. If unset, a random value is generated on first boot and persisted at `$DATA_DIR/.secret_key`. Set explicitly only for multi-instance deployments sharing a session store. Rotating invalidates all existing sessions. |
 | `SESSION_LIFETIME_HOURS` | `24` | How long authenticated sessions stay valid, in hours. |
+| `OMP_NUM_THREADS` | _(library default)_ | Caps OpenMP threads for local `faster-whisper` CPU transcription. On hybrid Intel CPUs the default can push work onto the slow E-cores and thrash the cache; set it to your performance-core count (more threads is not faster). No effect with a remote Whisper API or on GPU. See [Installation](installation.md#intel-hybrid-cpu-tuning-optional). |
 
 ### Optional
 

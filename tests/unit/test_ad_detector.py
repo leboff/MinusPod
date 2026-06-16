@@ -10,6 +10,7 @@ from ad_detector import (
     extract_sponsor_names,
     refine_ad_boundaries,
     merge_same_sponsor_ads,
+    deduplicate_window_ads,
     _extract_ad_keywords,
     validate_ad_timestamps,
     get_uncovered_portions,
@@ -257,6 +258,15 @@ class TestExtractAdKeywords:
         assert 'inserted' not in keywords
         assert 'promotion' not in keywords
 
+    def test_multiword_sponsor_drops_constituent_tokens(self):
+        """'Capital One' keeps the full phrase, drops standalone 'one'/'capital'."""
+        ad = {'start': 100, 'end': 160, 'sponsor': 'Capital One',
+              'reason': 'Capital One financing spot', 'confidence': 0.9}
+        keywords = _extract_ad_keywords(ad)
+        assert 'capital one' in keywords
+        assert 'one' not in keywords
+        assert 'capital' not in keywords
+
 
 class TestValidateAdTimestamps:
     """Tests for validate_ad_timestamps function."""
@@ -328,6 +338,23 @@ class TestValidateAdTimestamps:
         # Passed through unchanged since keywords not found anywhere
         assert result[0]['start'] == 100
         assert result[0]['end'] == 130
+
+    def test_multiword_sponsor_not_relocated_onto_generic_word(self):
+        """'Capital One' must not relocate onto editorial that only has 'one'."""
+        segments = self._make_segments([
+            (100, 110, 'Just regular discussion here'),
+            (200, 205, 'the only one here'),
+            (206, 211, 'no one knows that'),
+            (212, 217, 'one of them left'),
+            (218, 223, 'every one agreed'),
+            (400, 410, 'That is technology at Capital One'),
+        ])
+        ads = [{'start': 100, 'end': 130, 'confidence': 0.9,
+                'sponsor': 'Capital One', 'reason': 'Capital One spot'}]
+        result = validate_ad_timestamps(ads, segments, 0, 600)
+        assert len(result) == 1
+        # Lands on the real 'Capital One' read, not the 'one'-heavy editorial.
+        assert result[0]['start'] == 400
 
 
 class TestGetUncoveredPortions:
@@ -479,3 +506,44 @@ class TestClaudeFeedbackDedup:
                         updated_patterns.add(pid)
 
         assert mock_pattern_service.update_duration.call_count == 2
+
+
+class TestDeduplicateWindowMergeFlag:
+    """deduplicate_window_ads must flag a chained-distinct-ad span (positive
+    gap) so the reviewer keeps it expand-only, but NOT flag a same-ad overlap."""
+
+    def test_gap_chain_sets_merged_distinct_ads(self):
+        # Three back-to-back distinct ads within the 5s merge threshold, like
+        # the DTNS Live With It / Capital One / Grainger chain.
+        ads = [
+            {'start': 1987.2, 'end': 2006.0, 'sponsor': 'Live With It'},
+            {'start': 2006.0, 'end': 2034.1, 'sponsor': 'Capital One'},
+            {'start': 2034.6, 'end': 2073.3, 'sponsor': 'Grainger'},
+        ]
+        merged = deduplicate_window_ads(ads)
+        assert len(merged) == 1
+        assert merged[0]['start'] == 1987.2
+        assert merged[0]['end'] == 2073.3
+        assert merged[0].get('merged_distinct_ads') is True
+
+    def test_touching_distinct_ads_set_merged_distinct_ads(self):
+        # Two distinct ads emitted back-to-back with no gap (end == next start) -
+        # the common LLM contiguous-break shape. Must be flagged (touch counts).
+        ads = [
+            {'start': 100.0, 'end': 130.0, 'sponsor': 'Acme'},
+            {'start': 130.0, 'end': 160.0, 'sponsor': 'Beta'},
+        ]
+        merged = deduplicate_window_ads(ads)
+        assert len(merged) == 1
+        assert merged[0].get('merged_distinct_ads') is True
+
+    def test_overlap_dedup_does_not_set_merged_distinct_ads(self):
+        # Same ad detected twice across an overlapping window boundary.
+        ads = [
+            {'start': 100.0, 'end': 135.0, 'sponsor': 'Acme'},
+            {'start': 130.0, 'end': 138.0, 'sponsor': 'Acme'},
+        ]
+        merged = deduplicate_window_ads(ads)
+        assert len(merged) == 1
+        # Key must be absent, not merely falsy, so deleting the gap logic fails.
+        assert 'merged_distinct_ads' not in merged[0]

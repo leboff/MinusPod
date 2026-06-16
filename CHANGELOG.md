@@ -6,7 +6,286 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [2.8.13] - 2026-06-15
+
+### Changed
+
+- Feed detail page cleanup. The title's edit (pencil) icon is now always shown instead of only appearing on hover, so it can be tapped on touch devices. The Tags section starts collapsed. The per-feed controls that used to fill the header (network/DAI override, feed cap, auto-process, transcription language, and hide-unprocessed) now live in a "Feed settings" section that starts collapsed, pulled out into its own component to match the other feed panels.
+
+## [2.8.12] - 2026-06-15
+
+### Added
+
+- Editable feed title (#375). Each feed's detail page now has an inline title editor: rename a show and the new title is what subscribers see in their podcast app, so a MinusPod-processed feed is easy to tell apart from the source. The override survives RSS refreshes (the source title used to overwrite any manual edit), and clearing it falls back to the source title. Exposed as titleOverride on the feeds API.
+
+### Security
+
+- Bumped cryptography to 49.0.0, clearing GHSA-537c-gmf6-5ccf (the advisory pip-audit flagged on 48.0.0).
+
+### Changed
+
+- Swept the open dependency updates: anthropic 0.109.1, huggingface-hub 1.19.0, idna 3.18, pytest 9.1.0, and the frontend dev/lib bumps (typescript-eslint and @typescript-eslint/parser 8.61.0, @vitejs/plugin-react 6.0.2, @tailwindcss/vite 4.3.1, lucide-react 1.18.0).
+
+## [2.8.11] - 2026-06-15
+
+### Added
+
+- Per-feed transcription language override (#376). A new Language control on the feed detail page sets the Whisper language for a single show, overriding the global setting. Useful when you mix languages and "auto-detect (multilingual)" transcribes the wrong language or translates instead of transcribing. Choices are "Global default", "Auto-detect", or a specific language. The override is threaded through first-pass and verification transcription without mutating shared settings, and learned ad patterns are stamped with the feed's language so multi-lingual setups do not cross-contaminate the pattern database. (PR #377, authored by @ict.)
+
+## [2.8.10] - 2026-06-13
+
+### Added
+
+- Ad Distribution panel on the feed detail page (#360), collapsed by default under the tags section. It charts where ads have historically been cut across a feed's episodes (a normalized-position histogram) and highlights the learned prior zones on it, so you can see a show's ad pattern at a glance and decide whether the learned-positions experiment is worth enabling. The panel is informational and shows for every feed regardless of the experiment toggle, backed by a new GET /feeds/{slug}/ad-distribution endpoint.
+
+## [2.8.9] - 2026-06-12
+
+### Added
+
+- Learned ad positions experiment (#360), off by default. When enabled in Settings, each feed's historical cut starts (minus user-marked false positives, plus user-created and confirmed cuts) are clustered into per-feed ad-break zones once the feed has at least 5 learnable episodes (processed, over 60 seconds, with usable cut history) among its most recent 30. The zones feed the first-pass detection prompt as a scrutiny hint ("ad breaks have typically started near 12:30") and replace the global pre/mid/post-roll confidence boosts in validation with per-feed ones. A zone needs support in at least 60% of those learnable episodes and can span at most 10% of the episode (drifting break positions fail the gate instead of forming one giant zone); boosts stay capped at +0.10, cuts whose evidence is not position-independent (fingerprint, text pattern, language, manual, VAD gap) need at least 0.85 original confidence to feed the learning, and episodes whose length differs from the feed median by more than 2x skip the prior entirely. The verification pass and the retry-ad-detection endpoint are unaffected (both run on post-cut timelines where learned positions do not map).
+
+## [2.8.8] - 2026-06-12
+
+### Fixed
+
+- Pass-2 ads keep the right original-time twin through validation. The validator sorts, merges and drops ads, but the pipeline paired its output with the unvalidated original list by position, so after a merge or reorder a surviving ad could carry another ad's original timestamps into the ad editor. Each original now rides through validation attached to its processed twin.
+- A short real ad is no longer silently dropped. Cuts under 10 seconds were all discarded as likely hallucinations; a short cut now survives when a known fingerprint pattern matched it or detection confidence is at least 0.9. When a cut is dropped anyway, the ad editor now shows it as not cut instead of claiming it was removed.
+- Transcript lines partially covered by cuts no longer leak ad words. A line under the 80 percent drop threshold was kept whole; its in-cut words are now trimmed using Whisper's word timestamps, with the old behavior kept for episodes without word timing.
+- Overlapping spans in the combined cut list no longer double-shift transcript and chapter timestamps. adjust_timestamp merges spans into a union before subtracting, so a pass-2 ad touching a pass-1 cut cannot collapse segments to zero length.
+- Pass-2 validation clamps against the real audio duration (ffprobe) instead of the last transcript segment's end, which Whisper routinely over- or under-runs.
+- Audio cue (ding) timestamps land on the sound instead of up to a second after it. ebur128's momentary loudness window lags the true onset; the reported cue start is pulled back by a configurable onset lag (0.2s default).
+
+## [2.8.7] - 2026-06-10
+
+### Changed
+
+- LLM-only reprocess (#349) no longer transcribes at all. The first pass already reused the saved transcript, but the verification pass still re-transcribed the cut audio, so re-detecting ads still paid for one transcription. It now maps the saved transcript through the cuts to get the post-cut transcript instead of re-transcribing, so iterating on detection or LLM config is transcription-free. Audio-cue detection still runs on the real processed audio. The trade is that the verification pass can only re-examine what the saved transcript already captured; the other reprocess modes still re-transcribe.
+
+## [2.8.6] - 2026-06-10
+
+### Fixed
+
+- A freshly published episode that 404s on download is now retried instead of failing permanently on the first attempt. Hosts like acast often advertise an episode in the feed a few minutes before the media URL is ready, so the first download attempt 404s. The error was classified as permanent, so the episode failed and served a 410 to subscribers until someone reprocessed it by hand. A download 404 is now treated as transient and flows into the existing retry ladder; a genuinely dead link still fails for good once it exhausts the retry limit.
+
+## [2.8.5] - 2026-06-10
+
+### Fixed
+
+- The processed transcript no longer keeps a line whose audio was cut. A removed ad was only stripped from the transcript when a single cut covered more than 80 percent of a transcript line. A line that straddles two adjacent cuts (a first-pass cut and a verification re-cut that each take roughly half of it) slipped through and left the sponsor copy in the published transcript even though the audio for it was gone. Coverage is now measured against all of the cuts together, so a line that is almost entirely removed by the combined cuts is dropped.
+
+### Changed
+
+- Removed three internal merge marker fields that nothing read anymore (`validation_merged`, `merged_sponsor`, `merged_windows`); a single `merged_distinct_ads` marker replaced them in 2.8.4.
+
+## [2.8.4] - 2026-06-10
+
+### Fixed
+
+- Extended the 2.8.3 reviewer fix to the merge path that actually caused the Grainger survival. A back-to-back ad chain is collapsed into one cut by the window-deduplication step before validation ever sees it, and that step did not mark the result as a multi-ad span. So when the reviewer trimmed the merged block's end, it still severed the trailing ad. Re-verifying 2.8.3 on the Daily Tech News Show episode showed the cut was only saved by a second detection pass, not by the reviewer guard. Every merge that joins separate ads now sets one shared marker, including window and detection-stage merges and ads that sit exactly back-to-back, so the reviewer treats the whole span as expand-only. A single ad re-detected across an overlapping window is left tightenable as before.
+
+## [2.8.3] - 2026-06-10
+
+### Fixed
+
+- The ad reviewer no longer drops a confirmed ad when several back-to-back ads were merged into one cut. When the validator joins adjacent ads across a short gap, or merges fragments of the same sponsor, the result is one span covering several independently detected ads. The reviewer refines that span's boundaries, and an inward pull could land mid-span and sever a trailing ad from the cut. On a sampled Daily Tech News Show episode this left a full Grainger read (about 26 seconds) in the audio after the reviewer trimmed the merged block's end. Merged spans are now expand-only in the reviewer: it can still grow a cut outward to catch a leading or trailing call to action, but it cannot shrink one below the union of the ads it already confirmed. Single detected ads are unaffected and still tighten normally.
+
+## [2.8.2] - 2026-06-10
+
+### Fixed
+
+- Trailing call-to-action lines no longer survive at the end of a removed ad. Cut ends consistently landed a few seconds short, leaving the sponsor URL, a toll-free number, or a closing thank-you (3 to 19 seconds in sampled episodes) in the processed audio. The content-based end extension now runs once more after the ad reviewer, whose boundary verdicts could undo it. It also keeps walking past a connector line sandwiched between sponsor mentions instead of stopping at the first non-ad segment, recognizes toll-free phone numbers as ad content, and can extend up to 30 seconds instead of 15.
+- The generated transcript, chapters, and the verification pass's timestamp mapping are now built from the cuts ffmpeg actually applied instead of the requested list. The two diverge whenever near-adjacent cuts merge, a sub-10-second cut is dropped as a likely false positive, or an end-of-episode cut runs to the end of the file. The divergence shifted every verification timestamp after the affected cut and made the published transcript disagree with the audio around it.
+- The per-episode ads-removed count (episodes table, History page, completion log, webhook payload) now counts cuts that exist in the audio. A requested cut that merged into a neighbor still counts, but one filtered out as too short no longer inflates the number, and a verification-pass ad that the re-cut filtered away is no longer listed as removed in the ad editor.
+- Cut timestamps are clamped to the audio bounds before cutting. Detection can produce an end past the real file duration (Whisper's last segment routinely overruns ffprobe), which previously fed ffmpeg an out-of-range trim; a fully out-of-range cut is now skipped with a log line. When every requested cut filters away, the audio is copied through instead of pointlessly re-encoded.
+- The content-based boundary extension respects its 30-second window on both sides: a single long transcript segment straddling the boundary can no longer pull a cut past the window, and the post-reviewer tail sweep never extends a cut into the next detected ad.
+
+## [2.8.1] - 2026-06-09
+
+### Fixed
+
+- LLM-only reprocess (#349) now reuses the audio and transcript it already has instead of working against a fresh download. It reuses the retained original audio rather than re-downloading, so detection runs against the same recording it cuts. Dynamically inserted ads rotate between downloads, so the old behavior could detect one set of ads and cut another. It also reuses the saved Whisper segments, which carry word-level timestamps, instead of re-parsing the transcript text, which dropped that timing and measurably weakened first-pass detection.
+- The audio cue detection experiment (#350) now reads its enable toggle and tuneables on each run rather than once at startup, so turning it on in Settings takes effect on the next reprocess without a container restart.
+- The verification pass reuses the existing transcript when the first pass cut nothing, instead of re-transcribing the whole episode for an audio file that is identical to the original.
+- An empty completion from the LLM provider is now retried and, if it persists, recorded as a failed detection window instead of being treated as "no ads found" (#358). A flaky or rate-limited endpoint can no longer pass an episode through looking clean. A genuine empty-ad-list response is unaffected.
+
+### Changed
+
+- Dropped the redundant "Experimental" label from the Audio Cue Detection settings card; it already sits under the Experiments section.
+
+## [2.8.0] - 2026-06-09
+
+### Added
+
+- LLM-only reprocess mode (#349). A new "Re-detect Ads" option reruns ad detection and re-cuts the audio using the transcript already saved for an episode, so it skips the transcription step that dominates processing time on local hardware. It is available per episode and in bulk; episodes without a saved transcript are skipped. The transcript is preserved rather than deleted, unlike the existing Reprocess and Full Analysis modes.
+- Audio cue detection, an opt-in experiment (#350). Some shows play a short non-spoken ding or stinger just before an ad break that the transcript cannot capture. When enabled in Settings under Experiments, an extra ffmpeg pass band-passes the audio and flags brief loudness bursts in the cue's frequency band, then passes them to the ad detector as a timing hint. The cue never marks an ad on its own; the model must still find ad content in the transcript, so it only sharpens an ad's start time. The band, prominence threshold, and minimum confidence are tunable, and the Stats page shows how many cues were detected. Off by default.
+
+### Fixed
+
+- A podcast description containing the sequence `]]>` no longer corrupts the generated feed. That sequence closes a CDATA block early, which leaked the rest of the description as raw markup and broke the served XML for every subscriber of that podcast. Description text is now split across CDATA sections so the literal content round-trips intact.
+- The single-feed "Force refresh" now actually forces a refresh. The handler cleared the ETag but dropped the force flag before calling the refresh, so the 30-second coalesce window could still suppress a refresh requested within that window.
+- The pricing fetchers (OpenRouter, pricepertoken, LiteLLM) now cap the response body they read. A hostile or broken pricing host could previously return an unbounded body and exhaust worker memory.
+
+### Changed
+
+- Removed dead imports and unused locals flagged by static analysis, and declared the public re-export surface of the `ad_detector` package explicitly.
+
+## [2.7.9] - 2026-06-09
+
+### Added
+
+- `MINUSPOD_PORT` sets the internal listen port, defaulting to 8000. It helps when you run with host networking or several instances on one host and need to move off 8000. `GUNICORN_BIND` still wins when set. The container healthcheck and the compose port mapping, expose, and healthcheck all follow the variable, so a custom port no longer leaves the container reporting unhealthy. (#352)
+
+### Documentation
+
+- Linked the community pattern set (`patterns/README.md`) directly from the README documentation table (#354).
+
+## [2.7.8] - 2026-06-09
+
+### Fixed
+
+- LLM Tunables settings now save reliably (#351). The section had no Save button, and each field only committed when it lost focus, so on mobile an edit like raising the reviewer-pass token limit was usually discarded before it reached the server and reopening Settings showed the old default. Edits are now held and written in one request behind an explicit "Save LLM Tunables" button, matching the rest of the settings page.
+- "Reset All" and the per-field Reset now return the per-stage LLM tunables to their defaults. These keys were skipped on reset, so a tunable kept its last value.
+
+## [2.7.7] - 2026-06-07
+
+### Changed
+
+- Dependency updates rolled in from Dependabot. Python: anthropic 0.107.1, ctranslate2 4.8.0, beautifulsoup4 4.15.0, openai 2.41.0, scikit-learn 1.9.0. Frontend: react, react-dom, and react-is 19.2.7, react-router-dom 7.17.0, @tanstack/react-query 5.101.0, @types/react 19.2.17. CI: actions/checkout 6.0.3. (#338-#348)
+
+## [2.7.6] - 2026-06-07
+
+### Fixed
+
+- The Sponsors table no longer shows a horizontal scrollbar on desktop. In the fixed-layout table the Actions column was too narrow for its Edit and Delete buttons, so the cell overflowed and the table scrolled sideways. The column widths are rebalanced so the row fits at desktop widths.
+
+### Documentation
+
+- Documented `OMP_NUM_THREADS` for local CPU transcription on hybrid Intel CPUs (issue #333). On 12th gen and newer Intel chips the default OpenMP thread pool spreads `faster-whisper` work across the slow E-cores and thrashes the cache; capping `OMP_NUM_THREADS` to the performance-core count, and optionally pinning the container to P-cores with `--cpuset-cpus` (Docker) or `CPUSetCPUs=` (Podman), removes the bottleneck. Added an `OMP_NUM_THREADS` row to `docs/environment-variables.md`, a commented example in `.env.example`, and an "Intel hybrid CPU tuning" section to `docs/installation.md`. No code change; the value is read by CTranslate2 because MinusPod leaves `cpu_threads` at its default.
+
+## [2.7.5] - 2026-06-05
+
+### Added
+
+- The OpenRouter model dropdown now lists the `openrouter/free` and `openrouter/auto` router aliases (issue #331). Both are valid OpenRouter model IDs -- `openrouter/free` routes each request to one of OpenRouter's free models, `openrouter/auto` picks a model for the prompt -- but neither appears in OpenRouter's `/api/v1/models` response, so they never showed up in the dropdown and could not be selected. MinusPod now injects them when the provider is OpenRouter.
+
+### Fixed
+
+- A model the provider rejects as not-found now fails the episode with an actionable error instead of a generic "all windows failed" message. When every detection or verification window fails with a 404 or not-found, the error names the model and provider and notes that the provider's advertised model list can be incomplete, and the failure is marked non-retryable since a bad model ID will not recover on retry.
+
+### Documentation
+
+- Clarified model selection for issue #331: there is no `LLM_MODEL` environment variable (only `LLM_PROVIDER` selects the provider), and `OPENAI_MODEL` only seeds the model on first startup -- after that the stored value wins, so the model is changed in the Settings UI. Updated `docs/llm-providers.md`, `docs/environment-variables.md`, `.env.example`, and the Settings UI help text, and documented the `openrouter/free` and `openrouter/auto` aliases.
+
+## [2.7.4] - 2026-06-05
+
+### Fixed
+
+- Stopped a `Migration failed for match_key backfill: UNIQUE constraint failed: model_pricing.match_key` warning that logged on every startup. The pricing migration backfills `match_key` for older rows, but when a row's normalized key already belonged to another row (for example a live-fetched variant of the same model), the per-row `UPDATE` hit the existing UNIQUE index and aborted the whole migration before its dedup step could run, so the row stayed unkeyed and the warning came back on the next boot. The backfill now skips a row whose key another row already owns -- that row is a redundant duplicate the cost lookup never uses -- and the dedup step only touches real keyed collisions, never the NULL rows. No pricing data is removed.
+
+### Documentation
+
+- Documented the sponsor-name normalization regex format in `docs/web-interface.md`: the `terms`/`canonical` fields, the case-insensitive `re.sub`, the lowercasing and whitespace-collapse steps, anchoring, and the convention where an uppercase-containing replacement also acts as a transcript display correction. Expanded the same page's Sponsors coverage with the delete-unlinks-patterns behavior, and noted the container capability hardening (`cap_drop: ALL` plus the minimal `cap_add` set) in `docs/DEPLOYMENT.md`.
+- Filled OpenAPI gaps from the 2.6.0-2.7.4 changes: `PUT /sponsors/{id}` now documents `tags`, `is_active`, and `common_ctas`; the normalization create/update endpoints document the `terms`/`canonical` fields (the legacy `pattern`/`replacement` names are still accepted on write).
+
+## [2.7.3] - 2026-06-05
+
+### Added
+
+- `GUNICORN_BIND` now accepts a comma-separated list of addresses, so gunicorn can listen on more than one socket. This is mainly for rootless Podman, where you may want IPv4, IPv6, or both. For dual-stack, set `GUNICORN_BIND=[::]:8000` -- a single IPv6 wildcard also accepts IPv4 when the kernel keeps `bindv6only=0` (the Linux default). The default is unchanged (`0.0.0.0:8000`, IPv4), so existing Docker deployments behave as before. One caveat: don't list both `0.0.0.0:8000` and `[::]:8000` on a `bindv6only=0` kernel -- the IPv6 wildcard already claims the IPv4 port, so the second bind hits `EADDRINUSE` and gunicorn exits.
+
+## [2.7.2] - 2026-06-04
+
+### Fixed
+
+- **Settings reset to defaults when you reopen the page (issue #323, reopened).** Navigating away from Settings and back within the React Query cache window made every field show its hardcoded placeholder again -- LLM provider back to Anthropic, no key, models blank -- even though the values were still saved in the database. The 2.6.0 fix seeded the hydration snapshot from the loaded settings, so on a remount with cached data the form never re-hydrated and fell through to the component's hardcoded `useState` initializers. The snapshot now starts empty so the form always re-hydrates from the loaded settings (the unsaved-edit guard is unchanged), and the page renders a loader until settings load so the placeholders are never shown. The earlier "fixed in 2.6.0" call was wrong because it was tested via a full page reload (always a cold load); the bug only appears on in-app navigation. Confirmed reproduced and fixed with the navigate-away-and-back flow.
+- **No more hardcoded provider/model defaults in the Settings form.** The form's field defaults (provider, base URL, models, whisper backend/language/compute, audio bitrate, min-cut confidence, etc.) now come from the backend `GET /settings` `defaults` block -- the single source of truth -- instead of literals duplicated in the frontend. The hydration and change-detection paths share that source so the "Save Changes" button no longer risks getting stuck. On the backend, the OpenAI-compatible base URL default is now the `DEFAULT_OPENAI_BASE_URL` config constant (used by `get_effective_base_url`, the `LLMClient` fallback, and the defaults block), and the provider default in the defaults block resolves through the `ENV_BACKED_SETTINGS` registry, so each default is defined once. No default values changed.
+
+## [2.7.1] - 2026-06-03
+
+### Fixed
+
+- Sponsors page, Normalizations tab: the Pattern and Replacement columns were blank. The frontend read `pattern`/`replacement`, but the API returns those fields as `terms`/`canonical` (its v2 shape), so the values never rendered. The page now uses `terms`/`canonical`, matching the API. The OpenAPI `Normalization` schema is corrected to document `terms`/`canonical` (the legacy `pattern`/`replacement` names are still accepted on write).
+- Sponsors page, Normalizations tab on mobile: the table had no narrow-screen layout, so columns collapsed and the headers and action buttons overlapped. It now uses the same card layout as the sponsors list on small screens.
+
+## [2.7.0] - 2026-06-03
+
+### Added
+
+- Sponsors management page (issue #304). A new top-level Sponsors page surfaces the sponsor list that until now could only be managed through the API, so the auto-created and typo'd sponsors that accumulate during pattern learning can finally be cleaned up. Each row shows the number of ad patterns linked to the sponsor, its created date, and when a linked pattern last matched. You can add, edit (name, aliases, category, tags, active), and delete sponsors, filter by tag, search, and reveal inactive ones. A second tab manages name normalizations (regex find/replace). Deleting a sponsor is a real delete, not a deactivation; any ad patterns linked to it are unlinked (their sponsor link is cleared) rather than removed, so no pattern data is lost. The delete dialog shows how many patterns will be unlinked.
+
+### Changed
+
+- `DELETE /api/v1/sponsors/{id}` now permanently removes the sponsor instead of marking it inactive, and returns `unlinkedPatterns` (the count of patterns whose sponsor link was cleared). `GET /api/v1/sponsors` and `GET /api/v1/sponsors/{id}` now include `pattern_count` and `last_matched_at`. The OpenAPI `Sponsor` schema gains `tags`, `pattern_count`, and `last_matched_at`, and drops the `updated_at` field it documented but never returned.
+
+### Fixed
+
+- History page: the "filter by podcast" dropdown is now sorted alphabetically by title instead of arriving in feed order.
+
+## [2.6.2] - 2026-06-03
+
+### Fixed
+
+- Claude Opus 4.8 usage was cost-accounted at roughly 3x. The live pricing table (scraped from the provider's pricing page) did not list Opus 4.8 yet, so the lookup fell through to a prefix match and picked up Opus 4.0 rates ($15/$75 per million tokens) instead of the correct $5/$25. The built-in default pricing now includes Opus 4.7 and 4.8, and defaults are backfilled after every successful live fetch (Anthropic only), so a newly released Claude model is priced correctly until the upstream source catches up. A one-time migration recomputes any Opus 4.8 cost already recorded in the token-usage stats; no usage rows are removed.
+
+## [2.6.1] - 2026-06-02
+
+### Fixed
+
+- Part of a Capital One ad could survive the cut. Two faults combined: the timestamp-correction step treated "one" (split out of the sponsor name "Capital One") as a brand keyword and moved the real detection onto unrelated show talk, and the reviewer's request to pull the cut start earlier was dropped because it came back under `corrected_start`/`corrected_end` keys the parser never read. A multi-word sponsor is now kept as a single phrase instead of being split into its generic words, and the reviewer honors the corrected-boundary keys when start/end are absent (the render prompt no longer asks for keys it ignores).
+
+## [2.6.0] - 2026-06-01
+
+### Added
+
+- LLM benchmark: `benchmark run --snapshot <file>` and `benchmark report --snapshot <file>` pin the system prompt to a frozen file instead of the live `get_static_system_prompt()`. This decouples the stored corpus from the production `SEED_SPONSORS` list -- editing the sponsor list (or the prompt prose) no longer changes the prompt hashes and forces a full re-run. With no flag the live prompt is used as before. `benchmark dump-prompt <file>` writes the current live prompt to a file to seed a snapshot. The report's Run Metadata section records which prompt produced the run (`live` or `snapshot:<name>`) with a sha256 prefix.
+
+### Changed
+
+- LLM benchmark report: the TL;DR rankings (Best Accuracy, Best Value, Best Free-Tier) now lead with F0.5 instead of F1. MinusPod cuts the segments it flags, so a false positive (cutting real content) is worse than a false negative (leaving an ad in); F0.5 weights precision 2x recall to match. Best Accuracy and Best Free-Tier add a 95% confidence interval per model and group models into tiers by a paired one-sided t-test against the tier leader, so the top cluster that trades wins across the 12-episode corpus reads as one tier rather than a false strict order. Raw F1, precision, and recall stay as columns. Models are flagged (not reordered) for low JSON compliance (`brittle JSON`, < 0.90) or a failed no-ad negative control.
+
+### Security
+
+- **Pattern import replace-mode is now atomic.** A failure partway through a `mode=replace` import could permanently wipe the entire `ad_patterns` table, because the delete/create DB helpers committed individually and defeated the route's rollback. The import now runs as a single transaction through non-committing primitives, so a mid-import failure leaves every existing pattern intact.
+- **The hardened Docker compose stack now boots.** `cap_drop: ALL` removed the capabilities `setpriv` needs to drop root, so the container crash-looped before gunicorn started. A `cap_add` block now restores only `SETUID`/`SETGID`/`CHOWN`/`DAC_OVERRIDE`/`FOWNER` while keeping `cap_drop: ALL` and `no-new-privileges`. Mirrored to `docker-compose.cpu.yml`.
+- **Feed fetches use the strict SSRF tier by default (behavior change).** Stored feed URLs are re-fetched on every refresh; they are now DNS-resolved and blocked from private/loopback/metadata targets, closing a refresh-time DNS-rebinding window. Operators who serve feeds from a private/LAN address can opt back in with `MINUSPOD_ALLOW_PRIVATE_FEED_HOSTS=true`.
+- **The API fails closed before an app password is set (behavior change).** A not-yet-bootstrapped install no longer exposes the database backup, cleanup/reset, provider rotate/test, or feed delete/update routes; read-only browsing and first-run feed creation still work so setup can finish.
+- **Outbound fetches enforce hard byte caps and strip provider keys across host redirects.** Feed conditional/gzip-retry reads and audio downloads now cap the streamed body, closing decompression-bomb and disk-fill paths; `validate_base_url` resolves and rejects cloud-metadata/link-local targets reached via a hostname; and a redirect to a different host drops `x-api-key`/`api-key`.
+- **A corrupt or missing crypto salt fails closed.** It is no longer silently regenerated while encrypted secrets exist (which would orphan them permanently), and the backup-decrypt tool reads the salt read-only instead of constructing the full database.
+- **Login lockout hardened.** The failure counter increments atomically rather than via a SELECT-then-write that undercounts under concurrency, and an IPv4-mapped IPv6 public address can no longer evade it.
+
+### Fixed (audit remediation)
+
+- Interrupted DB table rebuilds no longer brick startup: `DROP TABLE IF EXISTS` guards each `*_new` rebuild and the episodes rebuilds recreate their full lookup-index set.
+- Ad-detection window creation can no longer hang the worker when the overlap is configured at or above the window size.
+- TF-IDF content matching now respects scope/tag/language filtering instead of scoring against every loaded pattern.
+- Volume analysis no longer stalls the pipeline for hours: the ebur128 ffmpeg call is time-capped and, with the other ffmpeg/ffprobe calls, routed through the shutdown-aware subprocess wrapper.
+- Custom webhook templates no longer silently drop auth-failure / rate-limit alerts; a render error falls back to the default payload and still delivers.
+- Cron accepts day-of-week 7 as Sunday and applies a step to a single-value base (`5/15` -> 5, 20, 35, 50).
+- The LLM benchmark report deduplicates overlapping-window predictions before scoring, removing a systematic downward bias on F1/precision/recall.
+- Settings form edits are no longer discarded by a background `['settings']` refetch.
+- Reprocess and artwork saves keep the existing file until the replacement is durable; community-sync refuses to mass-delete on an empty/truncated manifest; `split_bundle` rejects intra-run filename collisions; feed slugs are validated; OPML import is capped; plus assorted hardening across SSRF, secrets, concurrency, and the community-pattern tools.
+
+### Upgrade notes
+
+- No-password installs: without `APP_PASSWORD`, sensitive routes (backup, cleanup, provider rotate/test, feed delete/update) now return 403 until a password is set.
+- Private/LAN feed hosts: set `MINUSPOD_ALLOW_PRIVATE_FEED_HOSTS=true` if any feed source is on a private/LAN address, otherwise those feeds are rejected at fetch time.
+- Reverse proxy: set `MINUSPOD_TRUSTED_PROXY_COUNT` to the number of proxies in front of MinusPod so login lockout and rate limiting see the real client IP (defaults to 0).
+
+### Dependencies
+
+- Folded in the open Dependabot bumps: pip (`anthropic` 0.102.0 -> 0.105.2, `huggingface-hub` 1.16.1 -> 1.17.0, `idna` 3.16 -> 3.17), npm (`@tanstack/react-query`, `wavesurfer.js`, `vite`, `typescript-eslint`, `@typescript-eslint/eslint-plugin`), and GitHub Actions (`docker/login-action`, `actions/download-artifact`, `actions/upload-artifact`).
+
+### Changed
+
+- **`validator_known_sponsors.csv` is now sorted by sponsor name.** The seed list the PR validator checks against was in insertion order, which made it hard to scan when reviewing a submission. Rows are now sorted case-insensitively by name. The set of sponsors is unchanged, so validation results are identical.
+- **The two Ad Reviewer settings sections are now one, under Experiments.** The reviewer LLM config (enable, model, boundary shift, parallel reviews, prompts) and the pattern-update controls (the update-from-adjustments toggle and trim threshold) were separate Settings sections that shared the name "Ad Reviewer" and each had its own Save button. They now live in a single Ad Reviewer section and persist together through the page's Save button. The fields are grouped with dividers (reviewer behavior, pattern learning, prompts) to match the layout of the other settings sections, and the trim-threshold input now follows the same style as the section's other numeric fields. The pattern-update fields still write to `/settings/reviewer`; only the UI and save flow merged.
+
+### Fixed
+
+- **Ad Reviewer prompts no longer get stuck blank, and the "Reset Reviewer Prompts to Default" button works (issue #301).** `review_prompt` and `resurrect_prompt` were missing from the defaults map in `reset_setting` (`src/database/settings.py`), so resetting them was a silent no-op and a cleared-then-saved prompt stayed empty with no way back. Both keys are now in the map. The settings GET handler also falls back to the default when a stored prompt is empty or whitespace, so an already-stuck install heals on the next load, and `_apply_prompt_fields` reverts a blank prompt to its default on save instead of storing the empty value.
+- **`src/tools/generate_manifest.py` no longer rewrites `published_at` on no-op runs.** `build_manifest` stamped the current UTC time on every invocation, so the regenerate-manifest workflow's `git diff --quiet` was never quiet and it committed a timestamp-only change even when no pattern content changed (surfaced on PR #299). `main()` now reuses the prior timestamp when re-rendering the manifest with it reproduces the on-disk `index.json` byte-for-byte (`reuse_published_at`) -- the same rendered-bytes comparison the workflow's `git diff` makes, so a true no-op stays byte-identical and the commit step is skipped, while any real content change still bumps the timestamp.
+
+## [2.5.34] - 2026-05-29
 
 ### Added
 
@@ -15,13 +294,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Updated cloud-LLM model recommendations in `docs/llm-providers.md`** to reflect the new sweep. New rank-1: `qwen/qwen3.6-plus` (F1 0.693, $1.11/episode) edges out `qwen3.5-plus-02-15` (F1 0.679) by 0.014, inside the trial-stdev noise floor. New "fast + accurate" tier added: `qwen/qwen3.6-flash` (F1 0.660, p50 13.0s, $0.55/episode).
 - **Benchmark tool gains 10 new cloud models** in `benchmarks/llm/benchmark.toml.example` (also added to the gitignored live `benchmark.toml`): `qwen/qwen3-235b-a22b-2507`, `qwen/qwen3.6-plus`, `qwen/qwen3.6-flash`, `qwen/qwen3-8b`, `qwen/qwen3-14b`, `qwen/qwen3.5-27b`, `openai/gpt-5.4-mini`, `openai/gpt-oss-120b`, `deepseek/deepseek-v4-pro`, `google/gemini-2.5-flash-lite`. These are the cloud counterparts of the local recommendations in `docs/llm-providers.md`; they will populate the leaderboard after the next `benchmark run`.
 - **Benchmark report TL;DR tables now expose F1 stdev and JSON mode columns.** The F1 stdev column reads from the existing `ModelStats.mean_f1_stdev` (the mean across episodes of within-episode trial stdev) so rank gaps inside the noise floor are no longer easy to over-read. The JSON mode column classifies each model as `native`, `prompt-inject`, or `mixed` based on the `json_format_used` field that the runner has been writing to `calls.jsonl` for some time; a model is `native` or `prompt-inject` only when >=95% of calls used that mode, otherwise `mixed`. The per-model detail block also shows the JSON-mode primary, the native percent, and the call count.
-- **Remote Whisper API: optional "Skip FLAC compression" toggle.** When using an OpenAI-compatible Whisper backend, MinusPod normally re-encodes preprocessed WAV to FLAC before upload to avoid 413 errors on size-limited APIs. Self-hosted servers (e.g. whisper.cpp on localhost) can now skip that extra ffmpeg pass via Settings -> Transcription or the `WHISPER_API_SKIP_FLAC=true` env var.
-- **Remote Whisper API: automatic fallback when word timestamps are unsupported.** Servers such as OpenVINO Model Server that reject `timestamp_granularities[]=word` (e.g. `Word timestamps not supported for this model`) are retried with segment-only timestamps. Ad boundary refinement falls back to segment-level cuts when word data is absent.
+- **`src/tools/scaffold_community_pattern.py`** -- CLI helper for hand-crafting community pattern JSON. Writes a schema-correct file to `patterns/community/<slug>-<short_uuid>.json` so the filename matches the sponsor by construction. Closes the manual-contributor footgun behind PR #292.
+- **`src/tools/split_bundle.py`** -- maintainer helper that explodes a `minuspod-submission-*.json` bundle into per-pattern `<slug>-<short>.json` files in the same directory using the shared `slugify` helper. Refuses to overwrite existing files; removes the bundle on success unless `--keep-original` is passed.
+- **Pattern Export dialog lets the contributor refine sponsor, aliases, and tags per pattern before download.** Each row in the Export dialog grows an `Edit` toggle when the destination is `community`; the inline panel shows the sponsor / aliases / tags fields plus a live filename preview that matches what the PR validator's filename check will expect. Overrides are per-export only; the local pattern row is not modified. Backend routes (`/patterns/preview-export`, `/patterns/submit-bundle`) gained an additive optional `overrides` body field shaped `{ <pattern_id>: { sponsor?, sponsor_aliases?, sponsor_tags? } }`; existing callers that send no overrides keep the prior behaviour. Closes the upstream cause of the filename mismatches #294 catches at PR time.
 
 ### Changed
 
 - **`benchmarks/llm/src/benchmark/pricing.py:fetch_current` now unions LiteLLM with OpenRouter's `/api/v1/models` endpoint** (via the production `fetch_openrouter_pricing` helper). OpenRouter wins on key collisions when its entry carries a non-zero price; zero-price OR entries are skipped so they cannot clobber valid LiteLLM prices. The change closes a latency gap where benchmarked models with new OpenRouter slugs showed up at $0.00 cost until LiteLLM indexed them. The module docstring is updated to reflect the dual-source merge.
 - **Metric Key in the benchmark report (`_render_how_to_read`) documents the new JSON mode column** alongside JSON compliance and F1 stdev, restoring the "every column has a definition" contract.
+- **Community pattern validator now hard-rejects filename / sponsor / community_id mismatches** in per-pattern files. The PR #292 round surfaced two cases (`spotify-07df78ed.json` containing a Shopify pattern; `merck-ca6c0db7.json` with `sponsor: "badcholesterol.com"`) that today only revealed themselves on human review. The check uses the same `slugify` helper the exporter uses, so files produced by the in-app export pipeline pass by construction. Bundle / per-pattern filename shape mismatches downgrade to warnings.
+- **Truncated intro/outro variants surface as validator warnings** -- variants ending in `com`, `slash`, `the`, `at`, `and`, `or`, `to`, `of`, `a`, `an`, `for`, `in`, `on`, or a single non-`a`/`i` letter are flagged. Recall-only variants that look cut mid-clause (e.g. PR #292's vanta outro `"Go to V-A-N-T-A dot com slash com"`) clutter the pattern without matching anything new.
+- **Renamed `src/seed_data/sponsors_final.csv` to `src/seed_data/validator_known_sponsors.csv`** to match its actual job today. The file was originally the v2.4.0 one-shot DB seed for `known_sponsors`; that migration is now gated by `sponsor_seed_revision = '2.4.0'` and CSV edits no longer reach existing instances. The only ongoing consumer is the PR validator's multi-sponsor-contamination check (`find_foreign_sponsors`), so the file name now reflects that. Docstrings in `community_tags.sponsor_seed` and `_reseed_known_sponsors` were updated to call out the divergence and to clarify that new entries should be added only when a brand commonly appears as a foreign mention inside other sponsors' ad copy (the Keeps / Grubhub leakage case the check was built for). No behaviour change.
 
 ### Fixed
 
@@ -31,6 +314,157 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ### Notes for maintainers
 
 - The committed `calls.jsonl` rows were generated against a `SEED_SPONSORS` list that briefly excluded the `Zyn` entry (a local diff that was later reverted to match main). The system prompt for ad detection joins SEED_SPONSORS names, so the stored `prompt_hash` values do not match what current `src/utils/constants.py` would produce. A fresh `benchmark run` will therefore see zero completed rows and dispatch the full ~40k-call sweep from scratch. The committed report and per-call artifacts remain valid for review; they are just not bit-reproducible from the committed code without restoring the Zyn-removed state.
+
+## [2.5.33] - 2026-05-27
+
+### Changed
+
+- **Re-publish under a new tag so Portainer's webhook pulls a fresh image.** No code changes vs `2.5.32` -- the `ttlequals0/minuspod:2.5.32` push contained the `bulk_upsert` discovery-count fix, but the running stack restarted from its local image cache (the tag string was unchanged) and never picked up the new layers. Bumping the tag forces a registry pull on the next webhook fire. Future deploys against a same-tag rebuild should either set the stack's pull policy to always or follow this same pattern.
+
+## [2.5.32] - 2026-05-27
+
+### Changed
+
+- **Dashboard refresh controls now match the podcast detail page.** Each podcast card's `Refresh` / `Force refresh` dropdown trigger uses the same `px-3 py-1.5 sm:px-4 sm:py-2` sizing and default chevron as the `Refresh Feed` dropdown on `FeedDetail`, so the two pages look identical. The sibling Delete button on each card was bumped to match the new height.
+- **Dashboard `Refresh All` is now a dropdown with a `Force Refresh All` option** that mirrors the per-card pattern. The primary item issues a conditional GET per feed; the secondary item posts `{"force": true}` so every podcast's stored ETag / Last-Modified is bypassed and every feed is fully re-fetched.
+- **`refreshAllFeeds(options?)` in the frontend API client** now accepts an optional `{ force?: boolean }` argument, mirroring `refreshFeed`. Existing call sites without an argument continue to issue a non-force refresh.
+- **Mobile FeedCard footer compacted.** `CopyButton` hides its label on mobile and the Delete button collapses to a `Trash2` icon at `<sm` so the new larger Refresh dropdown trigger doesn't push the row off the card edge. The grid is now explicitly `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3` so the single-column mobile layout doesn't expand cards to widest-child min-content width.
+
+### Fixed
+
+- **`POST /feeds/refresh` now actually forces a re-fetch when `force=true`.** The handler used to clear every podcast's stored ETag and then call `refresh_all_feeds()` with no force argument, so per-feed work hit `refresh_rss_feed`'s 30-second `_refresh_coalesce` gate and silently skipped feeds touched recently (e.g. by the 15-minute background tick). `refresh_all_feeds(force=False)` now accepts the flag and threads it through to `refresh_rss_feed(force=True)`, which bypasses both the coalesce window and the conditional GET. New unit tests in `tests/unit/test_refresh_all_feeds_force.py` cover the propagation in both directions and the coalesce bypass.
+- **Force-refresh now clears stale ETag/Last-Modified when upstream drops the header.** Previously `refresh_rss_feed` only updated the DB ETag when the new response carried at least one of the two headers; on `force=True` with a 200 OK that omits both, the old DB value persisted and could cause the next scheduled conditional GET to send a stale validator and get a false 304. The guard now also fires whenever `force=True`, so a force refresh always brings the stored validators back into sync with the actual response (even if that means clearing them).
+- **`bulk_upsert_discovered_episodes` now returns the real new-row count.** SQLite's `cursor.rowcount` reports `1` for both the INSERT and the UPDATE branch of an `INSERT ... ON CONFLICT DO UPDATE` (and even for a UPDATE that sets every column to its current value), so the counter was incrementing for every re-touched row -- harmless for the DB but the downstream `Discovered N new episode(s)` log over-reported by orders of magnitude on a force refresh (e.g. `2697 new` when zero rows were actually inserted). The function now snapshots the existing GUID set up front and only counts genuinely new GUIDs. Added regression test in `tests/unit/test_database.py::TestBulkUpsertDiscoveredEpisodes::test_bulk_upsert_returns_zero_when_all_episodes_already_exist`.
+- **FeedCard dropdown panel no longer clipped by the card's `overflow-hidden`.** The card root previously needed `overflow-hidden` to clip the artwork's square corner to the card's rounded top-left; the same property silently clipped the Refresh dropdown panel hanging below the footer. The artwork wrapper now owns its own `overflow-hidden rounded-tl-lg`, the footer carries `rounded-b-lg`, and the card root is free to overflow so dropdowns can escape.
+- **Dashboard toolbar `overflow-x-auto` no longer clips the Refresh All dropdown panel.** Segmented-control scrolling moved into an inner wrapper; the outer toolbar row is now plain flex so the dropdown can render below the trigger without being cut off.
+- **`DropdownMenu` now closes on outside click and `Escape`.** Pre-existing bug across all call sites (FeedCard, FeedListItem, FeedDetail, Dashboard) -- the menu only closed on trigger or item click, so users who opened it and then clicked elsewhere were left with a stuck-open menu. A new effect listens for `mousedown` / `touchstart` outside the menu root and for the `Escape` keypress.
+
+### Documentation
+
+- **OpenAPI: `POST /feeds/refresh` now documents the `force` request body** (the backend already accepted it; the spec was silent). Schema mirrors `/feeds/{slug}/refresh` with `additionalProperties: false`.
+
+### Removed
+
+- **`Keeps` removed from `SEED_SPONSORS`** (constants.py, the docstring sponsor list in the LLM prompt, and `sponsors_final.csv`). The brand name collides with the common English verb "keeps" and was generating too many validation false-positives in community pattern submissions. Sponsor count drops from 255 to 254; two count assertions in `tests/unit/test_sponsor_seed_idempotent.py` and `tests/unit/test_community_tags_constants.py` updated accordingly. Existing DB rows are untouched (sponsor seeding is additive; user-managed sponsors persist).
+
+## [2.5.31] - 2026-05-27
+
+### Fixed
+
+- **v1/v2 backfill: removed unsafe `COALESCE(..., 0)` on `ads_removed` and `ads_removed_firstpass`.** The 2.5.30 hardening pass added COALESCE wrappers intending to make the predicate NULL-tolerant, but the result was the opposite: for legacy episode rows where `ads_removed IS NULL` (manual repair, partial restore, or pre-default-backfill schema state), the COALESCE coerced NULL to 0 and the predicate matched, causing the UPDATE to overwrite `history.ads_detected` with 0. SQL's three-valued logic already excludes NULL rows automatically (`NULL = X` evaluates to NULL, falsy in WHERE), so dropping the COALESCE restores the safer behavior. Added a code comment to both v1 and v2 SQL blocks explaining why raw columns are intentional.
+- **`record_processing_history` post-commit `logger.info` no longer false-negatives the webhook.** The trailing `logger.info(...)` after `conn.commit()` in `src/database/stats.py:record_processing_history` is now wrapped in `try/except: pass`. The 2.5.30 webhook short-circuit treats any exception from `record_processing_history` as "row not written" and skips `EVENT_EPISODE_PROCESSED`. Without this wrap, a broken log handler raising after the commit would skip the webhook for an episode whose row was already in the DB.
+- **Webhook now fires when `podcast_data` is None.** The 2.5.30 short-circuit treated "podcast row not found" identically to "INSERT raised", which dropped the webhook for episodes whose podcast row was deleted/renamed mid-pipeline. The webhook payload only needs slug + episode_id + counts, all of which are available regardless of the podcast row state. Now only an actual exception from `record_processing_history` suppresses the webhook.
+
+### Changed
+
+- **`tests/unit/test_history_ad_count.py`: dropped the `__defaults__` snapshot+restore atexit hook.** Other test files using the same pattern do not restore either, so per-file restoration was theater rather than safety. Kept the tempdir `shutil.rmtree` cleanup.
+- **`src/database/schema/__init__.py`: removed the duplicate `CREATE TABLE IF NOT EXISTS schema_migrations`** inside `_run_env_backed_settings_migration`. The hoisted CREATE at the top of `_run_schema_migrations` covers it. Renumbered the step comments accordingly.
+- **CHANGELOG: restored the 2.5.29 Loki-silence breadcrumb** that the 2.5.30 rewrite had softened.
+
+## [2.5.30] - 2026-05-26
+
+### Fixed
+
+- **v2 backfill of `processing_history.ads_detected` for episodes where the reviewer rejected some pass-1 ads.** The v1 backfill in 2.5.29 compared `history.ads_detected` against `episodes.ads_removed_firstpass`, but `firstpass` stores the pass-1 DETECTION count (pre-reviewer), not the post-reviewer cuts that the buggy 2.5.27 writer captured. v1 only matched episodes where the reviewer rejected zero ads, so cases like `macbreak-weekly-audio:2d9ccd57b93b` (firstpass detection=10, reviewer kept 6, verification=2, total cuts=8) stayed at the wrong value of 6. v2 (`_run_backfill_history_ads_detected_v2` in `src/database/schema/__init__.py`) derives the correct pass-1 cut count as `ads_removed - ads_removed_secondpass`, which equals the buggy writer's value regardless of how many ads the reviewer rejected or resurrected. New gate row `backfill_history_ads_detected_v2_postreviewer_cuts` so v2 runs once on the next boot for every deployer; v1's gate stays set and v1 does not re-run. v1-corrected rows are naturally excluded from v2 because their `ads_detected == ads_removed` and v2 requires `ads_detected == ads_removed - secondpass`, impossible when `secondpass > 0`.
+- **Webhook now only fires when the history row is written.** `_record_history_and_event` previously had separate `try/except` blocks for `record_processing_history` vs `fire_event`, so a failed history INSERT (disk full, locked DB, missing podcast row) still fired `EVENT_EPISODE_PROCESSED` with an `ads_removed` total that no `/api/v1/history` row backed. External webhook consumers and the History page are now consistent: if the history row was not written, the webhook is skipped and the skip is logged.
+- **Backfill hardening for v1 and v2.** Five defensive changes to `_run_backfill_history_ads_detected[_v2]` in `src/database/schema/__init__.py`: (a) `conn.rollback()` on outer-`except` so a v1 failure cannot leak uncommitted UPDATEs into v2's commit; (b) `INSERT OR IGNORE` on the gate-row INSERT so a concurrent gunicorn worker's race does not raise `UNIQUE constraint failed`; (c) `CREATE TABLE IF NOT EXISTS schema_migrations` is hoisted to the top of `_run_schema_migrations` so the backfills no longer depend on `_run_env_backed_settings_migration` succeeding first; (d) `ROW_NUMBER() OVER (... ORDER BY processed_at DESC, h.id DESC)` adds a stable tie-break so two history rows written in the same second pick the actual latest by primary-key order; (e) `COALESCE(..., 0)` wraps `ads_removed`, `ads_removed_firstpass`, `ads_removed_secondpass` so legacy rows with NULL columns are treated as 0 instead of silently failing the predicate.
+- **`_log_completion_summary` `verification_count` is now keyword-only.** Inserting `verification_count` into the positional signature in 2.5.28 created a footgun where a future positional caller using the older 7-arg form would shift a float `original_duration` into the `verification_count` slot. The `*,` separator forces all callers to pass it by name.
+- **v1 log lines unified with v2 f-string format.** On the 2.5.29 deploy, v1's per-row `%`-format `logger.info(...)` calls never surfaced in Loki despite the data update committing correctly; other `database.schema` log lines from the same boot were ingested fine. Root cause is still unconfirmed (likely upstream of the logger: a Loki promtail filter or an early-boot stdout buffering issue, not the format style itself), but switching v1 to f-strings keeps the migration's log shape consistent across both helpers and avoids one variable while we investigate.
+
+### Operator notes
+
+- **Aggregate ad-count totals will step up after this release.** Endpoints and dashboards that SUM/AVG/MIN/MAX `processing_history.ads_detected` (`/api/v1/history/stats`, the dashboard stats query in `src/database/stats.py`) reflect the corrected totals after backfill, so historical numbers jump for any deployer who had pre-2.5.28 episodes with verification re-cuts. This is the intended correction, not a regression.
+- **Orphan history rows are not backfilled.** Both migrations `INNER JOIN episodes`, so any history row whose episode row was already purged (feed dropped the episode, manual cleanup) stays at its undercounted value. The History page entry for such episodes will continue to show the pre-2.5.28 number.
+
+### Added
+
+- **`tests/unit/test_history_backfill_migration_v2.py`: 7 cases.** The macbreak-style row (firstpass != cuts because reviewer rejected) gets corrected. v1-already-corrected rows are not touched. Episodes with `secondpass=0` are untouched. Older reprocess rows are left alone while the latest row is corrected. The gate prevents v2 from running twice. Failed-status rows are untouched. The coexistence test verifies that a single boot of a deployer upgrading from `<=2.5.28` directly to 2.5.30 corrects both the easy-case rows (via v1) and the reviewer-rejected rows (via v2).
+
+## [2.5.29] - 2026-05-26
+
+### Fixed
+
+- **Backfilled `processing_history.ads_detected` for episodes affected by the pre-2.5.28 verification undercount.** A one-shot migration in `src/database/schema/__init__.py` (`_run_backfill_history_ads_detected`) repairs the LATEST `processing_history` row per `(podcast_id, episode_id)` where the bug pattern is unambiguous. Safe-update predicate: `status='completed'` AND the matching `episodes` row has `ads_removed_secondpass > 0` (verification re-cut happened) AND `history.ads_detected == episode.ads_removed_firstpass` (history captured pass-1 only, the bug signature) AND `history.ads_detected != episode.ads_removed` (skip rows already correct). For matching rows, `ads_detected` is updated to `episode.ads_removed` (the correct total stored by `_persist_episode_state`). Each update logs the before/after values at INFO. Gated by `schema_migrations` row `backfill_history_ads_detected_for_verification`, so the migration runs once per database.
+- **Older reprocess rows are deliberately left alone.** The `episodes` table retains only the latest processing state, so for episodes that were reprocessed before 2.5.28, prior history rows cannot be safely corrected without inventing data. The migration only touches the LATEST history row per episode. Aggregate totals in `/api/v1/history/stats` will rise after this migration runs but will remain slightly low for any deployer who had reprocessed episodes with verification cuts before the fix.
+
+### Added
+
+- **`tests/unit/test_history_backfill_migration.py`: 6 cases.** Latest row gets corrected when bug signature matches; already-correct rows are untouched; rows for episodes with `secondpass=0` are untouched; older reprocess rows survive while the latest row is corrected; the gate prevents the migration from running twice; failed-status rows (which legitimately store `ads_detected=0`) are untouched.
+
+## [2.5.28] - 2026-05-26
+
+### Fixed
+
+- **History page (and `/api/v1/history`) ad count undercounted by the verification re-cut.** `src/main_app/processing.py:_record_history_and_event` recorded `ads_detected=len(ads_to_remove)` and ignored the `verification_count` it received as a parameter; `_persist_episode_state` already stored the total (`len(ads_to_remove) + verification_count`) on the episodes table, so the two write paths disagreed. Settings -> History showed pass-1-after-reviewer counts; episodes where pass 1 removed nothing but verification re-cut found ads showed `0` next to real cuts. The webhook payload (`EVENT_EPISODE_PROCESSED`) inherits the bug since `webhook_service.py:420` reads `ads_removed` from `history.ads_detected`. Changed the `ads_detected` argument in `_record_history_and_event` to `len(ads_to_remove) + verification_count`.
+- **`Complete: N ads removed` log line had the same undercount.** `_log_completion_summary` formatted `len(ads_to_remove)` into the completion log without receiving `verification_count`, so it reported pass-1 cuts only. Episodes where pass 1 removed nothing but verification re-cut found 1 logged `Complete: 0 ads removed` next to a real 1-minute drop in duration. Plumbed `verification_count` into the function; the log now reports `len(ads_to_remove) + verification_count`.
+
+### Added
+
+- **`tests/unit/test_history_ad_count.py`: regression test pinning the history-ad-count contract.** Five cases: history records total (pass-1 + verification) and not pass-1 alone; the zero-verification path still records pass-1; the zero-pass-1-positive-verification path (the `glt1412515089:a40d43aec65b` scenario that prompted the audit) records the verification cuts; the completion log line includes verification in its total; the completion log reports `0 ads removed` when neither pass cut anything. Without these, the omission would have been invisible to CI for a third release in a row.
+
+## [2.5.27] - 2026-05-26
+
+### Fixed
+
+- **`openapi.yaml`: duplicate keys in the `PUT /settings/ad-detection` request body.** The request-body schema redundantly defined `audioBitrate`, `skipFlacCompression`, `adDetectionParallelWindows`, and `adReviewerParallelAds` twice -- once with the GET-response shape (`{value, isDefault}` object) and once with the actual request shape (plain string / boolean / integer). YAML parsers silently keep the last occurrence; OpenAPI validators warn or fail. The misplaced object-shape entries were copied from the response-side schema; the API only accepts plain values (e.g. `{"audioBitrate": "192k"}`), and the `_apply_audio_fields` handler in `src/api/settings.py` reads `data['audioBitrate']` directly as a string. Removed the misplaced object-shape block from the PUT request body and kept the plain-type entries. The other two locations where these fields appear (the `Settings` response schema at line 4922 with object shape, and the `Settings.defaults` sub-object at line 5078 with plain shape) are intentional and unchanged -- they describe distinct response shapes, not the request body. Original duplicate-key bug was for `audioBitrate` only; the same broken pattern was extended to the three new fields when they were added in 2.5.23. The bug went undetected because PyYAML silently keeps the last occurrence on duplicate keys -- no parse error, no warning, no CI step validated the spec. External fork user `s1shed` flagged the original `audioBitrate` duplicate (PR #287).
+
+### Added
+
+- **`tests/unit/test_openapi_spec.py`: regression guards for `openapi.yaml`.** Five test cases close the gap that let the duplicate-key bug ship: (1) the spec parses with the standard SafeLoader; (2) a `StrictDuplicateKeyLoader` subclass rejects any duplicate key inside any mapping (this would have failed the 2.5.23 branch immediately); (3) a meta-test confirms the strict loader actually raises on a known-duplicate fixture; (4) top-level shape sanity (`openapi`, `info.version`, `paths`, `components` all present); (5) the `/settings/ad-detection` PUT request body uses plain primitive types (`string`, `boolean`, `integer`) for the four fields the bug touched, not the response-side `object` wrapper. Pure stdlib + PyYAML, no new dependencies.
+
+## [2.5.26] - 2026-05-25
+
+### Fixed
+
+- **"Parallel ad reviews" knob moved to the correct UI section.** 2.5.25 placed the input in `AdReviewerSection.tsx` (the small section that controls reviewer-feedback pattern auto-updates), but the user-visible "Ad Reviewer" controls live in `ExperimentsSection.tsx` (which holds the reviewer Enable toggle, model selector, max boundary shift, and prompts). The knob is now under the same "Ad Reviewer" section that already contains the reviewer execution settings, beneath "Max boundary shift". Backend exposes the same `adReviewerParallelAds` field on the main `/settings` endpoint alongside `adDetectionParallelWindows`; the alternate `/settings/reviewer` exposure remains in place for API consumers that prefer the dedicated endpoint.
+
+## [2.5.25] - 2026-05-25
+
+### Added
+
+- **Parallel reviewer passes via a separate `AD_REVIEWER_PARALLEL_ADS` knob.** 2.5.23 parallelized ad detection and verification windows; the Ad Reviewer was left sequential because it iterates one ad at a time rather than one window at a time. `AdReviewer._review_inner` now runs the accepted and resurrection pools through a shared `_run_review_batch` helper that uses `ThreadPoolExecutor` with bounded concurrency, position-indexed merge to keep verdicts in input order, and an early-exit single-item path that skips the executor entirely. Default 4 concurrent reviews; validated [1, 32]. Exposed in the Settings page under the existing "Ad Reviewer" section as a new "Parallel ad reviews" numeric input, and on the API via `GET/PUT /settings/reviewer` as `parallelAds` / `parallelAdsDefault`. Setting to 1 preserves the original sequential behavior. Registered in `ENV_BACKED_SETTINGS` so the same data-preserving migration story from 2.5.23 applies (UI customizations survive env changes).
+
+## [2.5.24] - 2026-05-25
+
+### Fixed
+
+- **"Skip FLAC compression" toggle is now visible in Settings regardless of the active Whisper backend.** 2.5.23 placed the control inside the `whisperBackend === WHISPER_BACKENDS.OPENAI_API` conditional block, which made the toggle invisible on Local-Whisper deployments and prevented operators from configuring the preference before switching backends. Moved the toggle out of the conditional so it always renders under the Transcription section. The help text now states explicitly that the setting only takes effect when the Whisper backend is set to API; on Local Whisper the toggle stores the preference for later use but is a no-op because no audio is uploaded to begin with.
+
+## [2.5.23] - 2026-05-25
+
+### Added
+
+- **"Skip FLAC compression" toggle for the Whisper API path.** A new boolean setting `skipFlacCompression` (DB key `skip_flac_compression`, env `SKIP_FLAC_COMPRESSION`, default false) lets operators running self-hosted Whisper servers that accept WAV directly skip the intermediate FFmpeg FLAC encode in `Transcriber._transcribe_via_api`. Default-off preserves the existing FLAC compression so public OpenAI / OpenRouter endpoints stay under their upload size limits. Exposed in Settings under Transcription -> Whisper API and via `/settings` GET / `/settings/ad-detection` PUT. Reset returns to false.
+- **Parallel ad-detection windows.** Replaces the sequential per-window LLM loop in `AdDetector.detect_ads()` and `run_verification_detection()` with a `ThreadPoolExecutor` so independent transcript windows run concurrently through the LLM. New `adDetectionParallelWindows` setting (DB key `ad_detection_parallel_windows`, env `AD_DETECTION_PARALLEL_WINDOWS`, default 4, validated range [1, 32]). 1 preserves the original sequential behavior; higher values cut wall-clock detection time at the cost of concurrent load on the LLM provider. Exposed in the Settings page under LLM Tunables in a new "Detection Concurrency" block and via `/settings` GET / `/settings/ad-detection` PUT. Window-position-indexed merge keeps the resulting ads in transcript order even when futures complete out of order. A per-call progress lock prevents two completed workers from racing on the progress callback.
+
+### Changed
+
+- **`ENV_BACKED_SETTINGS` registry with data-preserving migration.** Central registry in `src/config.py` describes every setting whose default comes from an environment variable: `(db_key, env_var, fallback, validator)`. First four entries: `llm_provider`, `audio_bitrate`, `skip_flac_compression`, `ad_detection_parallel_windows`. On every boot `_run_env_backed_settings_migration` in `src/database/schema/__init__.py` (a) ensures a `schema_migrations` table exists, (b) logs an audit line per registered key, (c) runs a one-shot corrective gate that flips `is_default` to 0 for any row where `is_default=1` but value diverges from env, **preserving the stored value** -- no deployer's DB loses data, (d) re-syncs `is_default=1` rows to the current env on every subsequent boot. Stops the recurrence pattern that caused issue #266 (env-backed settings ignored after first DB init) without overwriting customizations made via the UI.
+- **Per-episode token accumulator is now lock-protected instead of thread-local.** `_episode_accumulator` in `src/llm_client.py` was a `threading.local()` so different gunicorn threads couldn't corrupt each other. With ad-detection windows now running on a `ThreadPoolExecutor`, worker threads need to contribute to the same totals as the main thread. The accumulator is now a single `_EpisodeAccumulator` object guarded by `threading.Lock`. Single-episode isolation is enforced upstream by the fcntl flock on `.processing_queue.lock`, so the global accumulator is correct in practice. The existing `start_episode_token_tracking()` / `get_episode_token_totals()` public API is unchanged.
+
+## [2.5.22] - 2026-05-25
+
+### Fixed
+
+- **Third-party HTTP/LLM SDK DEBUG output no longer bleeds into Loki when `LOG_LEVEL=DEBUG`.** Production runs at DEBUG so the application's own loggers (`podcast.refresh`, `podcast.patterns`, `pricing_fetcher`, `storage`, etc.) can be inspected, but the same setting was letting `openai._base_client`, `httpcore.http11`, and `httpx` emit full request/response dumps -- request headers, idempotency keys, response bodies -- on every LLM call. `setup_logging` in `src/main_app/__init__.py` now pins `openai`, `httpx`, `httpcore`, `anthropic`, `asyncio`, `charset_normalizer`, and `requests` to WARNING regardless of root level. The application's `podcast.llm_io` logger is unaffected so prompt/response capture still works on demand. Loki triage post-2.5.21 surfaced roughly 35 of these DEBUG lines per ad-detection run, plus continuous chatter from RSS refresh and pricing-fetcher; that volume now stays out of the log stream.
+
+## [2.5.21] - 2026-05-24
+
+### Changed
+
+- **Rolled up 14 open Dependabot updates** onto the 2.5.20 transport-bar fix. Pip: `idna` 3.15 -> 3.16 (CVE-2026-45409 floor bump), `huggingface-hub` 1.15.0 -> 1.16.1, `ctranslate2` 4.7.1 -> 4.7.2, `openai` 2.37.0 -> 2.38.0, `pyjwt` 2.12.1 -> 2.13.0. npm (frontend dev/runtime): `@tailwindcss/vite` 4.2.4 -> 4.3.0, `typescript-eslint` 8.59.3 -> 8.59.4, `@typescript-eslint/eslint-plugin` 8.59.3 -> 8.59.4, `@types/react` 19.2.14 -> 19.2.15, `react-router-dom` 7.15.0 -> 7.15.1. Docker base: `nvidia/cuda` 12.9.1-runtime-ubuntu24.04 -> 12.9.2-runtime-ubuntu24.04 (GPU image only; `Dockerfile.cpu` stays on `ubuntu:24.04` per the mirror checklist). GitHub Actions (SHA-pinned, SHAs copied from each Dependabot PR rather than typed): `actions/setup-python` v5.6.0 -> v6.2.0 (regenerate-manifest workflow), `docker/setup-buildx-action` v4.0.0 -> v4.1.0 and `docker/build-push-action` v7.1.0 -> v7.2.0 (cpu-image workflow, both setup-buildx call sites). Closes #272, #273, #274, #275, #276, #277, #278, #279, #280, #281, #282, #283, #284, #285.
+
+## [2.5.20] - 2026-05-23
+
+### Fixed
+
+- **Ad Review transport bar keeps the speed selector inline with the playback buttons on narrow viewports** instead of wrapping it to a new row inside the box (2.5.19's approach, which the design rejected). The buttons cluster + selector is compacted in place: per-button padding `p-2` -> `p-1.5`, inner gap `gap-1` -> `gap-0.5`, the decorative `border-l` divider between Stop and the selector is dropped, and the selector itself shrinks from `h-8 pl-2 pr-5` to `h-7 pl-1.5 pr-4` with the chevron pulled in from `right-1.5` to `right-1`. Saves roughly 50 px of inner-row width, enough that all 7 controls fit on a single row inside the bordered transport bar at typical mobile widths. Outer container's `flex-wrap` is kept so the time readout still drops below the controls if space is too tight; the readout was never the overflow culprit.
+
+## [2.5.19] - 2026-05-23
+
+### Fixed
+
+- **Ad Review transport bar no longer overflows on narrow viewports.** The playback-rate `<select>` lives in the same inner flex container as the play/seek buttons inside the bordered transport bar in `AdReviewModal`. The outer container already had `flex-wrap`, so the right-side time readout dropped to a new row on narrow widths, but the inner buttons div lacked `flex-wrap`, so the speed selector was pushed past the container's right border and rendered visually outside the box. Added `flex-wrap` to the inner div so the selector now wraps onto a new row inside the bordered control rather than escaping it.
 
 ## [2.5.18] - 2026-05-22
 

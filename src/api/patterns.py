@@ -388,8 +388,10 @@ def merge_patterns():
             total_confirmations += pattern.get('confirmation_count', 0)
             total_false_positives += pattern.get('false_positive_count', 0)
 
-        # Update the kept pattern with merged stats
-        db.update_ad_pattern(keep_id,
+        # Update the kept pattern with merged stats on the same connection (no
+        # inner commit) so the stat update, corrections move, and pattern
+        # deletes below are one atomic transaction (api-settings-patterns-5).
+        db._update_ad_pattern_conn(conn, keep_id,
             confirmation_count=total_confirmations,
             false_positive_count=total_false_positives
         )
@@ -943,8 +945,11 @@ def _validate_import_items(patterns):
     return valid_patterns, None
 
 
-def _upsert_import_pattern(db, pattern_data, existing, mode):
-    """Apply one validated import item against an existing match (if any).
+def _upsert_import_pattern(db, conn, pattern_data, existing, mode):
+    """Apply one validated import item against an existing match (if any),
+    writing on the caller's open transaction (no inner commit) so the whole
+    import is atomic. Sponsor ids are pre-resolved into '_sponsor_id' before
+    the transaction opens.
 
     Returns 'imported', 'updated', or 'skipped'.
     """
@@ -952,31 +957,23 @@ def _upsert_import_pattern(db, pattern_data, existing, mode):
         if mode == 'supplement':
             return 'skipped'
         # merge or replace
-        pd_sponsor = pattern_data.get('sponsor')
-        pd_sponsor_id = (
-            get_or_create_known_sponsor(db, pd_sponsor)
-            if pd_sponsor else None
-        )
         updates = {
             'text_template': pattern_data.get('text_template'),
             'intro_variants': pattern_data.get('intro_variants'),
             'outro_variants': pattern_data.get('outro_variants'),
-            'sponsor_id': pd_sponsor_id,
+            'sponsor_id': pattern_data.get('_sponsor_id'),
         }
         updates = {k: v for k, v in updates.items() if v is not None}
         if updates:
-            db.update_ad_pattern(existing['id'], **updates)
+            db._update_ad_pattern_conn(conn, existing['id'], **updates)
             return 'updated'
         return 'skipped'
 
-    bulk_sponsor = pattern_data.get('sponsor')
-    bulk_sponsor_id = (
-        get_or_create_known_sponsor(db, bulk_sponsor) if bulk_sponsor else None
-    )
-    db.create_ad_pattern(
+    db._create_ad_pattern_conn(
+        conn,
         scope=pattern_data.get('scope'),
         text_template=pattern_data.get('text_template'),
-        sponsor_id=bulk_sponsor_id,
+        sponsor_id=pattern_data.get('_sponsor_id'),
         podcast_id=pattern_data.get('podcast_id'),
         network_id=pattern_data.get('network_id'),
         dai_platform=pattern_data.get('dai_platform'),
@@ -986,10 +983,12 @@ def _upsert_import_pattern(db, pattern_data, existing, mode):
     return 'imported'
 
 
-def _apply_pattern_imports(db, valid_patterns, mode, skipped_count=0):
-    """Wrap the whole import in a single transaction. Returns
-    (imported, updated, skipped) on success or raises on failure;
-    the caller handles rollback.
+def _apply_pattern_imports(db, conn, valid_patterns, mode, skipped_count=0):
+    """Apply the import on the caller's open transaction. Every write goes
+    through the non-committing pattern primitives, so replace-mode deletes and
+    the subsequent creates are all-or-nothing: a failure mid-loop rolls back
+    via the caller and no existing pattern is lost. Returns
+    (imported, updated, skipped) on success or raises on failure.
     """
     imported_count = 0
     updated_count = 0
@@ -997,12 +996,12 @@ def _apply_pattern_imports(db, valid_patterns, mode, skipped_count=0):
     if mode == 'replace':
         existing = db.get_ad_patterns(active_only=False)
         for p in existing:
-            db.delete_ad_pattern(p['id'])
+            db._delete_ad_pattern_conn(conn, p['id'])
         logger.info(f"Replace mode: deleted {len(existing)} existing patterns")
 
     for pattern_data in valid_patterns:
         existing = _find_similar_pattern(db, pattern_data)
-        result = _upsert_import_pattern(db, pattern_data, existing, mode)
+        result = _upsert_import_pattern(db, conn, pattern_data, existing, mode)
         if result == 'imported':
             imported_count += 1
         elif result == 'updated':
@@ -1071,11 +1070,21 @@ def import_patterns():
     if err is not None:
         return err
 
+    # Resolve sponsor ids up front (this may create known_sponsors rows that
+    # commit independently; an orphaned sponsor row is harmless if the import
+    # later rolls back) so the atomic pattern transaction below contains no
+    # inner commits and replace-mode is truly all-or-nothing.
+    for pattern_data in valid_patterns:
+        sponsor = pattern_data.get('sponsor')
+        pattern_data['_sponsor_id'] = (
+            get_or_create_known_sponsor(db, sponsor) if sponsor else None
+        )
+
     conn = db.get_connection()
     try:
         conn.execute('BEGIN IMMEDIATE')
         imported_count, updated_count, skipped_count = _apply_pattern_imports(
-            db, valid_patterns, mode
+            db, conn, valid_patterns, mode
         )
         conn.commit()
     except Exception:
@@ -1243,22 +1252,67 @@ def _coerce_int_ids(raw) -> list:
     return out
 
 
+_ALLOWED_OVERRIDE_FIELDS = ('sponsor', 'sponsor_aliases', 'sponsor_tags')
+
+
+def _coerce_overrides(raw):
+    """Validate and coerce the optional `overrides` body field.
+
+    Expects ``{ "<pattern_id>": { sponsor?, sponsor_aliases?, sponsor_tags? } }``
+    with string keys (JSON object) and int-coercible values. Drops keys whose
+    pattern id is not int-coercible and fields that are not in the allowed set
+    so route handlers do not need to defend themselves. Field VALUES are also
+    type-checked at this boundary: `sponsor` must be a string, `sponsor_aliases`
+    and `sponsor_tags` must be lists of strings. Bad values are dropped silently
+    so a malformed body cannot reach the export pipeline and trigger an
+    AttributeError on `.strip()` or a char-list explosion via `list(str)`.
+    Returns None when `raw` is None; raises ValueError when `raw` is present
+    but not a dict.
+    """
+    if raw is None:
+        return None
+    if not isinstance(raw, dict):
+        raise ValueError('overrides must be a JSON object keyed by pattern id')
+    out = {}
+    for k, v in raw.items():
+        try:
+            pid = int(k)
+        except (TypeError, ValueError):
+            continue
+        if not isinstance(v, dict):
+            continue
+        cleaned = {}
+        if isinstance(v.get('sponsor'), str):
+            cleaned['sponsor'] = v['sponsor']
+        aliases = v.get('sponsor_aliases')
+        if isinstance(aliases, list) and all(isinstance(x, str) for x in aliases):
+            cleaned['sponsor_aliases'] = aliases
+        tags = v.get('sponsor_tags')
+        if isinstance(tags, list) and all(isinstance(x, str) for x in tags):
+            cleaned['sponsor_tags'] = tags
+        out[pid] = cleaned
+    return out
+
+
 @api.route('/patterns/preview-export', methods=['POST'])
 @log_request
 def preview_export_to_community():
     """Dry-run: report which of these pattern ids would pass quality gates.
 
-    Body: ``{"ids": [int, ...]}``. Returns
-    ``{ready, rejected, ready_count, rejected_count}`` where ``rejected``
-    is ``[{id, sponsor, reasons:[str]}]``.
+    Body: ``{"ids": [int, ...], "overrides"?: {<id>: {sponsor?, sponsor_aliases?, sponsor_tags?}}}``.
+    Returns ``{ready, rejected, ready_count, rejected_count, pattern_count}``.
     """
     from community_export import build_bundle
     body = request.get_json(silent=True) or {}
     ids = _coerce_int_ids(body.get('ids'))
     if not ids:
         return error_response('ids required (non-empty list of integers)', 400)
+    try:
+        overrides = _coerce_overrides(body.get('overrides'))
+    except ValueError as e:
+        return error_response(str(e), 400)
     db = get_database()
-    bundle, rejected = build_bundle(ids, db)
+    bundle, rejected = build_bundle(ids, db, overrides=overrides)
     rejected_id_set = {r['id'] for r in rejected}
     ready_ids = [i for i in ids if i not in rejected_id_set]
     return json_response({
@@ -1275,9 +1329,9 @@ def preview_export_to_community():
 def submit_bundle_to_community():
     """Build a single-file community submission bundle for download.
 
-    Body: ``{"ids": [int, ...]}``. Returns ``application/json`` with a
-    ``Content-Disposition: attachment`` header so the browser downloads
-    the file. The bundle is the artifact the user commits into
+    Body: ``{"ids": [int, ...], "overrides"?: {<id>: {sponsor?, sponsor_aliases?, sponsor_tags?}}}``.
+    Returns ``application/json`` with a ``Content-Disposition: attachment`` header so the browser
+    downloads the file. The bundle is the artifact the user commits into
     ``patterns/community/`` to open one PR for all selected patterns.
     """
     from community_export import build_bundle
@@ -1285,15 +1339,20 @@ def submit_bundle_to_community():
     ids = _coerce_int_ids(body.get('ids'))
     if not ids:
         return error_response('ids required (non-empty list of integers)', 400)
+    try:
+        overrides = _coerce_overrides(body.get('overrides'))
+    except ValueError as e:
+        return error_response(str(e), 400)
     db = get_database()
-    bundle, rejected = build_bundle(ids, db)
+    bundle, rejected = build_bundle(ids, db, overrides=overrides)
     if bundle['pattern_count'] == 0:
         return error_response({
             'message': 'No patterns passed quality gates',
             'rejected': rejected,
         }, 400)
+    from utils.community_tags import BUNDLE_NAME_PREFIX
     first_cid = bundle['patterns'][0]['community_id']
-    filename = f'minuspod-submission-{first_cid.split("-")[0]}.json'
+    filename = f'{BUNDLE_NAME_PREFIX}{first_cid.split("-")[0]}.json'
     body_text = json.dumps(bundle, indent=2, ensure_ascii=False)
     return Response(
         body_text,

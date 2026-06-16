@@ -24,6 +24,16 @@ from utils.validation import is_valid_episode_id
 logger = logging.getLogger('podcast.api')
 
 
+def _clear_episode_for_mode(db, slug, episode_id, mode):
+    """Clear cached detection data before a reprocess. LLM-only mode keeps the
+    saved transcript (clears just the ad-detection outputs) so transcription is
+    skipped; every other mode wipes the whole episode_details row."""
+    if mode == 'llm':
+        db.clear_episode_ad_data(slug, episode_id)
+    else:
+        db.clear_episode_details(slug, episode_id)
+
+
 def _processed_url(base_url: str, slug: str, episode_id: str, version: int) -> str:
     """Build the public processed-audio URL including a version suffix when set."""
     return episode_public_url(base_url, slug, episode_id, version)
@@ -423,7 +433,6 @@ def reprocess_episode(slug, episode_id):
     which supports reprocess modes (reprocess vs full).
     """
     db = get_database()
-    storage = get_storage()
 
     episode = db.get_episode(slug, episode_id)
     if not episode:
@@ -437,7 +446,8 @@ def reprocess_episode(slug, episode_id):
         return error_response('Podcast not found', 404)
 
     try:
-        storage.delete_processed_file(slug, episode_id)
+        # Keep existing audio: reprocessing writes a new versioned file and
+        # prunes the old one only after it's durable (orchestration-5).
         db.clear_episode_details(slug, episode_id)
 
         # Mark as user-initiated so the background drainer honors it
@@ -603,16 +613,17 @@ def reprocess_all_episodes(slug):
     Modes:
     - reprocess (default): Use pattern DB + Claude (leverages learned patterns)
     - full: Skip pattern DB entirely, Claude does fresh analysis without learned patterns
+    - llm: Re-detect + re-cut using each saved transcript, skipping
+      re-transcription (issue #349). Episodes without a transcript are skipped.
     """
     db = get_database()
-    storage = get_storage()
 
     # Get mode from request body
     data = request.get_json() or {}
     mode = data.get('mode', 'reprocess')
 
-    if mode not in ('reprocess', 'full'):
-        return error_response('Invalid mode. Use "reprocess" or "full"', 400)
+    if mode not in ('reprocess', 'full', 'llm'):
+        return error_response('Invalid mode. Use "reprocess", "full", or "llm"', 400)
 
     podcast = db.get_podcast_by_slug(slug)
     if not podcast:
@@ -640,12 +651,15 @@ def reprocess_all_episodes(slug):
             skipped.append({'episodeId': episode_id, 'reason': 'Already processing'})
             continue
 
-        try:
-            # Delete processed audio file
-            storage.delete_processed_file(slug, episode_id)
+        # LLM-only reprocess needs a saved transcript; skip episodes without one.
+        if mode == 'llm' and not db.has_transcript(slug, episode_id):
+            skipped.append({'episodeId': episode_id,
+                            'reason': 'No transcript for LLM-only reprocess'})
+            continue
 
-            # Clear episode details from database
-            db.clear_episode_details(slug, episode_id)
+        try:
+            # Keep existing audio until the new version is durable (orchestration-5).
+            _clear_episode_for_mode(db, slug, episode_id, mode)
 
             # Reset status to pending with reprocess mode for priority queue
             db.upsert_episode(
@@ -682,7 +696,11 @@ def reprocess_all_episodes(slug):
 @limiter.limit("5 per minute")
 @log_request
 def bulk_episode_action(slug):
-    """Bulk actions on episodes: process, reprocess, reprocess_full, delete."""
+    """Bulk actions on episodes: process, reprocess, reprocess_full, reprocess_llm, delete.
+
+    reprocess_llm re-detects + re-cuts using each saved transcript, skipping
+    re-transcription (issue #349); episodes without a transcript are skipped.
+    """
     db = get_database()
     storage = get_storage()
 
@@ -701,8 +719,8 @@ def bulk_episode_action(slug):
         return error_response('episodeIds is required and must be non-empty', 400)
     if len(episode_ids) > 500:
         return error_response('Maximum 500 episodes per bulk action', 400)
-    if action not in ('process', 'reprocess', 'reprocess_full', 'delete'):
-        return error_response('Invalid action. Use: process, reprocess, reprocess_full, delete', 400)
+    if action not in ('process', 'reprocess', 'reprocess_full', 'reprocess_llm', 'delete'):
+        return error_response('Invalid action. Use: process, reprocess, reprocess_full, reprocess_llm, delete', 400)
 
     queued = 0
     skipped = 0
@@ -730,9 +748,9 @@ def bulk_episode_action(slug):
                                                     reprocess_requested_at=utc_now_iso())
             skipped += len(eligible_ids) - queued
 
-    elif action in ('reprocess', 'reprocess_full'):
+    elif action in ('reprocess', 'reprocess_full', 'reprocess_llm'):
         # File cleanup must be per-episode, but DB updates are batched
-        mode = 'full' if action == 'reprocess_full' else 'reprocess'
+        mode = {'reprocess_full': 'full', 'reprocess_llm': 'llm'}.get(action, 'reprocess')
         eligible_ids = []
         for episode_id in episode_ids:
             try:
@@ -740,13 +758,21 @@ def bulk_episode_action(slug):
                 if not episode or episode.get('status') not in ('processed', 'failed', 'permanently_failed'):
                     skipped += 1
                     continue
-                storage.delete_processed_file(slug, episode_id)
+                # LLM-only reprocess needs a saved transcript; skip episodes without one.
+                if mode == 'llm' and not db.has_transcript(slug, episode_id):
+                    skipped += 1
+                    continue
+                # Keep existing audio until the new version is durable (orchestration-5).
                 eligible_ids.append(episode_id)
             except Exception as e:
                 logger.error(f"Bulk action error for {slug}:{episode_id}: {e}")
                 errors.append(f"{episode_id}: bulk action failed")
         if eligible_ids:
-            db.batch_clear_episode_details(slug, eligible_ids)
+            # LLM-only mode preserves the transcript; other modes wipe the row.
+            if mode == 'llm':
+                db.batch_clear_episode_ad_data(slug, eligible_ids)
+            else:
+                db.batch_clear_episode_details(slug, eligible_ids)
             now_str = utc_now_iso()
             queued = db.batch_set_episodes_pending(slug, eligible_ids,
                                                     reprocess_mode=mode,
@@ -774,7 +800,7 @@ def bulk_episode_action(slug):
     # picks them up sequentially. Previously this called start_background_processing()
     # with no arguments (a TypeError silently swallowed by `except Exception: pass`),
     # which meant episodes were marked pending in the DB but never actually processed.
-    if action in ('process', 'reprocess', 'reprocess_full') and queued > 0:
+    if action in ('process', 'reprocess', 'reprocess_full', 'reprocess_llm') and queued > 0:
         for episode_id in eligible_ids:
             try:
                 ep = episodes_by_id.get(episode_id)
@@ -840,6 +866,9 @@ def retry_ad_detection(slug, episode_id):
                 podcast_tags = set(json.loads(_tags_json)) if _tags_json else None
             except Exception:
                 podcast_tags = None
+            # No positional_prior_hint here (issue #360): the stored transcript
+            # is post-cut for processed episodes, so original-timeline hint
+            # times would misdirect the model -- same reason pass 2 skips it.
             ad_result = ad_detector.process_transcript(
                 segments, podcast_name, episode.get('title', 'Unknown'), slug, episode_id,
                 podcast_id=slug,  # Pass slug as podcast_id for pattern matching
@@ -963,8 +992,6 @@ def cancel_episode_processing(slug, episode_id):
     if not episode:
         return error_response('Episode not found', 404)
 
-    status_service = get_status_service()
-
     if episode['status'] != EpisodeStatus.PROCESSING:
         # Queued (waiting on the lock): close the DB queue row first so the
         # background worker stops seeing it as pending, then drop from the
@@ -1031,15 +1058,16 @@ def reprocess_episode_with_mode(slug, episode_id):
     Modes:
     - reprocess (default): Use pattern DB + Claude (leverages learned patterns)
     - full: Skip pattern DB entirely, Claude does fresh analysis without learned patterns
+    - llm: Re-run ad detection and re-cut using the SAVED transcript, skipping
+      re-transcription (issue #349). Requires an existing transcript.
     """
     db = get_database()
-    storage = get_storage()
 
     data = request.get_json() or {}
     mode = data.get('mode', 'reprocess')
 
-    if mode not in ('reprocess', 'full'):
-        return error_response('Invalid mode. Use "reprocess" or "full"', 400)
+    if mode not in ('reprocess', 'full', 'llm'):
+        return error_response('Invalid mode. Use "reprocess", "full", or "llm"', 400)
 
     episode = db.get_episode(slug, episode_id)
     if not episode:
@@ -1052,6 +1080,13 @@ def reprocess_episode_with_mode(slug, episode_id):
     if not podcast:
         return error_response('Podcast not found', 404)
 
+    # LLM-only reprocess reuses the saved transcript to skip re-transcription;
+    # it cannot run without one. Mirror retry-ad-detection's guard.
+    if mode == 'llm' and not db.has_transcript(slug, episode_id):
+        return error_response(
+            'No transcript available for LLM-only reprocess. '
+            'Use "reprocess" or "full" to re-transcribe first.', 400)
+
     try:
         # 1. Set reprocess_mode FIRST so process_episode can read it
         db.upsert_episode(
@@ -1063,9 +1098,9 @@ def reprocess_episode_with_mode(slug, episode_id):
             error_message=None
         )
 
-        # 2. Clear cached data
-        storage.delete_processed_file(slug, episode_id)
-        db.clear_episode_details(slug, episode_id)
+        # 2. Clear cached detection data; keep the processed audio until the new
+        # version is durable (orchestration-5).
+        _clear_episode_for_mode(db, slug, episode_id, mode)
 
         # 3. Get episode metadata for processing
         episode_url = episode.get('original_url')

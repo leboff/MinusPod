@@ -1,6 +1,7 @@
 """Feed routes: /feeds/* endpoints."""
 import logging
 import os
+import re
 import time
 import xml.etree.ElementTree as ET  # defusedxml has no SubElement/tostring, so keep ET for OPML export only
 from typing import Optional
@@ -16,9 +17,62 @@ from api import (
     _serialize_auto_process, _deserialize_auto_process,
     _serialize_nullable_bool, _deserialize_nullable_bool,
 )
+from positional_prior import compute_ad_distribution
+from utils.language import LANGUAGE_CODE_RE
 from utils.url import validate_url, SSRFError
+from utils.validation import is_valid_slug
 
 from slugify import slugify as make_slug
+
+
+def _normalize_language_override(value):
+    """Validate the per-feed language override.
+
+    Returns (db_value, error). db_value is the string to persist (None to
+    clear the override) and error is a user-facing message or None.
+    Accepts None / empty string to clear, 'auto' to pin auto-detect for
+    this feed, or an ISO-639-1-ish code that matches the same regex as
+    the global whisperLanguage setting.
+    """
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, "languageOverride must be a string, 'auto', or null"
+    val = value.strip().lower()
+    if not val:
+        return None, None
+    if val != 'auto' and not LANGUAGE_CODE_RE.match(val):
+        return None, "languageOverride must be 'auto' or a 2-3 letter language code (e.g. 'en', 'de', 'pt')"
+    return val, None
+
+
+_TITLE_OVERRIDE_MAX = 500
+# C0 control characters that XML 1.0 forbids even when escaped (everything
+# below 0x20 except tab/LF/CR), plus DEL. Left in a title they make the served
+# feed not-well-formed and every subscriber's app rejects it.
+_XML_FORBIDDEN_CONTROLS = re.compile(r'[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]')
+
+
+def _normalize_title_override(value):
+    """Validate the per-feed display title override (#375).
+
+    Returns (db_value, error). None / empty / whitespace clears the override
+    (the served feed falls back to the source title). Strips surrounding
+    whitespace, removes XML-forbidden control characters, and collapses any
+    interior whitespace (newlines/tabs) so the served single-line <title>
+    stays well-formed. Rejects non-strings and titles over 500 chars.
+    """
+    if value is None:
+        return None, None
+    if not isinstance(value, str):
+        return None, "titleOverride must be a string or null"
+    val = _XML_FORBIDDEN_CONTROLS.sub('', value)
+    val = re.sub(r'\s+', ' ', val).strip()
+    if not val:
+        return None, None
+    if len(val) > _TITLE_OVERRIDE_MAX:
+        return None, f"titleOverride must be {_TITLE_OVERRIDE_MAX} characters or fewer"
+    return val, None
 
 
 def _slug_from_url_path(source_url: str) -> Optional[str]:
@@ -29,7 +83,13 @@ def _slug_from_url_path(source_url: str) -> Optional[str]:
     parsed = urlparse(source_url)
     slug_base = parsed.path.strip('/').split('/')[-1] or parsed.netloc
     slug_base = slug_base.replace('.xml', '').replace('.rss', '')
-    return make_slug(slug_base) if slug_base else None
+    candidate = make_slug(slug_base) if slug_base else None
+    # A purely-numeric path segment (e.g. a feed id like /1411126.rss) makes a
+    # meaningless slug; return None so the caller asks the user for one rather
+    # than committing a numeric slug (feeds-api-1).
+    if candidate and candidate.isdigit():
+        return None
+    return candidate
 
 logger = logging.getLogger('podcast.api')
 
@@ -41,7 +101,6 @@ logger = logging.getLogger('podcast.api')
 def list_feeds():
     """List all podcast feeds with metadata."""
     db = get_database()
-    storage = get_storage()
 
     podcasts = db.get_all_podcasts()
 
@@ -54,6 +113,7 @@ def list_feeds():
         feeds.append({
             'slug': podcast['slug'],
             'title': podcast['title'] or podcast['slug'],
+            'titleOverride': podcast.get('title_override'),
             'sourceUrl': podcast['source_url'],
             'feedUrl': feed_url,
             'artworkUrl': f"/api/v1/feeds/{podcast['slug']}/artwork" if podcast.get('artwork_cached') else podcast.get('artwork_url'),
@@ -135,6 +195,16 @@ def add_feed():
             400,
         )
 
+    # Validate the final slug. A client may supply one directly, bypassing the
+    # derivation path; is_valid_slug rejects reserved words, uppercase, spaces,
+    # path-traversal characters, and over-length values (feeds-api-1).
+    if not is_valid_slug(slug):
+        return error_response(
+            f'Invalid slug "{slug}": use lowercase letters, digits and hyphens '
+            '(max 200 chars), not a reserved word.',
+            400,
+        )
+
     db = get_database()
 
     # Check if slug already exists
@@ -158,6 +228,14 @@ def add_feed():
         if max_ep is not None:
             max_ep = max(10, min(int(max_ep), 500))
             db.update_podcast(slug, max_episodes=max_ep)
+
+        # Apply language override if provided at creation time
+        if 'languageOverride' in data:
+            lang_val, lang_err = _normalize_language_override(data['languageOverride'])
+            if lang_err:
+                return error_response(lang_err, 400)
+            if lang_val is not None:
+                db.update_podcast(slug, language_override=lang_val)
 
         if 'onlyExposeProcessedEpisodes' in data:
             db.update_podcast(
@@ -221,13 +299,19 @@ def import_opml():
         logger.error(f"OPML encoding error: {e}")
         return error_response('File must be UTF-8 encoded', 400)
 
-    # Find all outline elements with xmlUrl (RSS feeds)
+    # Find all outline elements with xmlUrl (RSS feeds). Cap the count so a huge
+    # OPML can't tie up a worker doing thousands of synchronous DNS lookups and
+    # feed creations in one request (feeds-api-4).
+    MAX_OPML_FEEDS = 500
     feeds_found = []
     for outline in root.iter('outline'):
         xml_url = outline.get('xmlUrl')
         if xml_url:
             title = outline.get('text') or outline.get('title') or ''
             feeds_found.append({'url': xml_url, 'title': title})
+            if len(feeds_found) >= MAX_OPML_FEEDS:
+                logger.warning("OPML import truncated at %d feeds", MAX_OPML_FEEDS)
+                break
 
     if not feeds_found:
         return error_response('No RSS feeds found in OPML file', 400)
@@ -401,6 +485,8 @@ def get_feed(slug):
         'daiPlatform': podcast.get('dai_platform'),
         'networkIdOverride': podcast.get('network_id_override'),
         'autoProcessOverride': auto_process_override_result,
+        'languageOverride': podcast.get('language_override'),
+        'titleOverride': podcast.get('title_override'),
         'maxEpisodes': podcast.get('max_episodes'),
         'onlyExposeProcessedEpisodes': _deserialize_nullable_bool(podcast.get('only_expose_processed_episodes')),
     })
@@ -420,12 +506,13 @@ def update_feed(slug):
     if not data:
         return error_response('No data provided', 400)
 
-    # Map API field names to database field names
+    # Map API field names to database field names. Note: the source `title` is
+    # RSS-managed (a refresh overwrites it), so it is intentionally NOT editable
+    # here -- user renames go through `titleOverride` below (#375).
     field_map = {
         'networkId': 'network_id',
         'daiPlatform': 'dai_platform',
         'networkIdOverride': 'network_id_override',
-        'title': 'title',
         'description': 'description'
     }
 
@@ -440,11 +527,26 @@ def update_feed(slug):
     if 'autoProcessOverride' in data:
         updates['auto_process_override'] = _serialize_auto_process(data['autoProcessOverride'])
 
+    if 'languageOverride' in data:
+        lang_val, lang_err = _normalize_language_override(data['languageOverride'])
+        if lang_err:
+            return error_response(lang_err, 400)
+        updates['language_override'] = lang_val
+
+    if 'titleOverride' in data:
+        title_val, title_err = _normalize_title_override(data['titleOverride'])
+        if title_err:
+            return error_response(title_err, 400)
+        updates['title_override'] = title_val
+
     # Handle maxEpisodes
     if 'maxEpisodes' in data:
         max_ep = data['maxEpisodes']
         if max_ep is not None:
-            max_ep = max(10, min(int(max_ep), 500))
+            try:
+                max_ep = max(10, min(int(max_ep), 500))
+            except (ValueError, TypeError):
+                return error_response('maxEpisodes must be an integer', 400)
         updates['max_episodes'] = max_ep
 
     if 'onlyExposeProcessedEpisodes' in data:
@@ -469,8 +571,10 @@ def update_feed(slug):
         # Settings changes that alter the served RSS body must regenerate it.
         # Clearing etag/last_modified first ensures that if the force-refresh
         # below throws, the next scheduled refresh cannot 304 and will fully
-        # regenerate the feed with the new settings applied.
-        if 'max_episodes' in updates or 'only_expose_processed_episodes' in updates:
+        # regenerate the feed with the new settings applied. title_override
+        # rewrites the served channel <title> (#375), so it belongs here too.
+        if ('max_episodes' in updates or 'only_expose_processed_episodes' in updates
+                or 'title_override' in updates):
             db.update_podcast_etag(slug, None, None)
             try:
                 from main_app.feeds import refresh_rss_feed
@@ -484,6 +588,8 @@ def update_feed(slug):
             'networkId': podcast.get('network_id'),
             'daiPlatform': podcast.get('dai_platform'),
             'networkIdOverride': podcast.get('network_id_override'),
+            'languageOverride': podcast.get('language_override'),
+            'titleOverride': podcast.get('title_override'),
             'maxEpisodes': podcast.get('max_episodes'),
             'onlyExposeProcessedEpisodes': _deserialize_nullable_bool(podcast.get('only_expose_processed_episodes')),
             'feedUrl': f"{base_url}/{slug}"
@@ -554,7 +660,7 @@ def refresh_feed(slug):
 
     try:
         from main_app.feeds import refresh_rss_feed
-        refresh_rss_feed(slug, podcast['source_url'])
+        refresh_rss_feed(slug, podcast['source_url'], force=force)
 
         # Get updated info
         podcast = db.get_podcast_by_slug(slug)
@@ -587,21 +693,15 @@ def refresh_all_feeds():
     try:
         db = get_database()
 
-        # Check for force parameter
         data = request.get_json(silent=True)
-        if data and data.get('force'):
-            # Clear all ETags to force non-conditional fetch
-            podcasts = db.get_all_podcasts()
-            for podcast in podcasts:
-                db.update_podcast_etag(podcast['slug'], None, None)
-            logger.info(f"Force refresh requested, cleared ETags for {len(podcasts)} feeds")
+        force = bool(data and data.get('force'))
 
         from main_app.feeds import refresh_all_feeds as do_refresh
-        do_refresh()
+        do_refresh(force=force)
 
         podcasts = db.get_all_podcasts()
 
-        logger.info("Refreshed all feeds")
+        logger.info(f"Refreshed all feeds (force={force})")
         return json_response({
             'message': 'All feeds refreshed',
             'feedCount': len(podcasts)
@@ -681,6 +781,39 @@ def get_feed_tags(slug):
     if not db.get_podcast_by_slug(slug):
         return error_response('Feed not found', 404)
     return json_response(db.get_podcast_tags(slug))
+
+
+@api.route('/feeds/<slug>/ad-distribution', methods=['GET'])
+@log_request
+def get_ad_distribution(slug):
+    """Where this feed's ad cuts historically land across an episode.
+
+    Setting-independent (does not require the positional-prior experiment to
+    be enabled): purely informational for the feed detail panel.
+    """
+    db = get_database()
+    if not db.get_podcast_by_slug(slug):
+        return error_response('Feed not found', 404)
+
+    dist = compute_ad_distribution(db, slug)
+    return json_response({
+        'slug': slug,
+        'episodesConsidered': dist.episodes_considered,
+        'medianDurationSeconds': dist.median_duration,
+        'bucketCount': dist.bucket_count,
+        'buckets': dist.buckets,
+        'totalEvents': dist.total_events,
+        'zones': [
+            {
+                'center': z.center,
+                'low': z.low,
+                'high': z.high,
+                'support': z.support,
+                'boost': z.boost,
+            }
+            for z in dist.zones
+        ],
+    })
 
 
 @api.route('/feeds/<slug>/tags', methods=['PUT'])

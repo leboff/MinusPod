@@ -105,6 +105,21 @@ def read_response_capped(
     return bytes(buf)
 
 
+def stream_to_file_capped(response, fh, max_bytes, *, already=0, chunk_size=8192):
+    """Stream a response body into file handle ``fh`` with a hard total byte cap
+    (counting ``already`` bytes already on disk). Raises ``ResponseTooLargeError``
+    if exceeded. Returns total bytes written."""
+    total = already
+    for chunk in response.iter_content(chunk_size=chunk_size):
+        if not chunk:
+            continue
+        total += len(chunk)
+        if total > max_bytes:
+            raise ResponseTooLargeError(f"stream exceeds {max_bytes} bytes")
+        fh.write(chunk)
+    return total
+
+
 def _validate_for_tier(url: str, trust: URLTrust) -> None:
     """Run the tier-appropriate SSRF validator. Raises ``SSRFError`` on reject."""
     if trust is URLTrust.OPERATOR_CONFIGURED:
@@ -128,10 +143,17 @@ class _RevalidatingSession(requests.Session):
         self.max_redirects = max_redirects
 
     def rebuild_auth(self, prepared_request, response):
+        original_host = urlparse(response.request.url).hostname if response.request else None
         super().rebuild_auth(prepared_request, response)
         target = prepared_request.url
         _reject_https_downgrade(response.url, target)
         _validate_for_tier(target, self._trust)
+        # requests' rebuild_auth strips Authorization on a cross-host redirect
+        # but not provider-specific auth headers; drop those too so a 3xx to an
+        # attacker-controlled host cannot exfiltrate an API key (creds-5).
+        if original_host and urlparse(target).hostname != original_host:
+            for header in ('x-api-key', 'api-key'):
+                prepared_request.headers.pop(header, None)
 
 
 def safe_get(
@@ -156,6 +178,29 @@ def safe_get(
     finally:
         if not stream:
             session.close()
+
+
+def get_capped(
+    url: str,
+    trust: URLTrust,
+    max_bytes: int,
+    *,
+    max_redirects: int = HTTP_MAX_REDIRECTS_API,
+    timeout: float = HTTP_TIMEOUT_FETCH,
+    headers: Optional[dict] = None,
+) -> bytes:
+    """GET ``url`` and return the body, enforcing a hard byte cap on the
+    streamed response so a small compressed payload cannot balloon in memory.
+    Always closes the session. Raises ``SSRFError``, ``requests.RequestException``,
+    or ``ResponseTooLargeError``."""
+    response = safe_get(
+        url, trust, max_redirects=max_redirects, timeout=timeout,
+        stream=True, headers=headers,
+    )
+    try:
+        return read_response_capped(response, max_bytes)
+    finally:
+        response.close()
 
 
 def safe_head(

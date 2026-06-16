@@ -1,4 +1,5 @@
 """Tests for multi-provider LLM pricing system."""
+import json
 import pytest
 from unittest.mock import patch, MagicMock
 
@@ -165,7 +166,7 @@ class TestPricePerTokenScraper:
         """
         with patch('pricing_fetcher.safe_get') as mock_get:
             mock_resp = MagicMock()
-            mock_resp.text = html
+            mock_resp.iter_content = MagicMock(return_value=[html.encode()])
             mock_resp.raise_for_status = MagicMock()
             mock_get.return_value = mock_resp
 
@@ -191,7 +192,7 @@ class TestPricePerTokenScraper:
         """
         with patch('pricing_fetcher.safe_get') as mock_get:
             mock_resp = MagicMock()
-            mock_resp.text = html
+            mock_resp.iter_content = MagicMock(return_value=[html.encode()])
             mock_resp.raise_for_status = MagicMock()
             mock_get.return_value = mock_resp
 
@@ -207,7 +208,7 @@ class TestPricePerTokenScraper:
 
         with patch('pricing_fetcher.safe_get') as mock_get:
             mock_resp = MagicMock()
-            mock_resp.text = '<html><body><p>No data</p></body></html>'
+            mock_resp.iter_content = MagicMock(return_value=[b'<html><body><p>No data</p></body></html>'])
             mock_resp.raise_for_status = MagicMock()
             mock_get.return_value = mock_resp
 
@@ -229,7 +230,7 @@ class TestPricePerTokenScraper:
         """
         with patch('pricing_fetcher.safe_get') as mock_get:
             mock_resp = MagicMock()
-            mock_resp.text = html
+            mock_resp.iter_content = MagicMock(return_value=[html.encode()])
             mock_resp.raise_for_status = MagicMock()
             mock_get.return_value = mock_resp
 
@@ -251,7 +252,7 @@ class TestPricePerTokenScraper:
         """
         with patch('pricing_fetcher.safe_get') as mock_get:
             mock_resp = MagicMock()
-            mock_resp.text = html
+            mock_resp.iter_content = MagicMock(return_value=[html.encode()])
             mock_resp.raise_for_status = MagicMock()
             mock_get.return_value = mock_resp
 
@@ -290,7 +291,7 @@ class TestOpenRouterFetcher:
 
         with patch('pricing_fetcher.safe_get') as mock_get:
             mock_resp = MagicMock()
-            mock_resp.json.return_value = mock_data
+            mock_resp.iter_content = MagicMock(return_value=[json.dumps(mock_data).encode()])
             mock_resp.raise_for_status = MagicMock()
             mock_get.return_value = mock_resp
 
@@ -376,6 +377,41 @@ class TestSeedDefaultPricing:
         ).fetchone()
         assert row['input_cost_per_mtok'] == 99.0
         assert row['source'] == 'pricepertoken'
+
+    def test_backfill_fills_gap_left_by_live_fetch(self):
+        """A live fetch missing claudeopus48 gets it backfilled at 5/25 (source=default)."""
+        from database.settings import SettingsMixin
+
+        conn = self._create_test_db()
+        mixin = SettingsMixin()
+        mixin.get_connection = lambda: conn
+
+        # Live source publishes everything except Opus 4.8 (too new to be listed).
+        mixin.upsert_fetched_pricing([{
+            'match_key': 'claudeopus4',
+            'raw_model_id': 'claude-opus-4',
+            'display_name': 'Claude Opus 4',
+            'input_cost_per_mtok': 15.0,
+            'output_cost_per_mtok': 75.0,
+        }], source='pricepertoken')
+
+        # Backfill defaults -> fills the claudeopus48 gap, leaves live rows intact.
+        mixin.seed_default_pricing()
+
+        opus48 = conn.execute(
+            "SELECT * FROM model_pricing WHERE match_key = 'claudeopus48'"
+        ).fetchone()
+        assert opus48 is not None
+        assert opus48['input_cost_per_mtok'] == 5.0
+        assert opus48['output_cost_per_mtok'] == 25.0
+        assert opus48['source'] == 'default'
+
+        # Live Opus 4.0 row untouched (DO NOTHING did not clobber it).
+        opus4 = conn.execute(
+            "SELECT * FROM model_pricing WHERE match_key = 'claudeopus4'"
+        ).fetchone()
+        assert opus4['input_cost_per_mtok'] == 15.0
+        assert opus4['source'] == 'pricepertoken'
 
 
 class TestPricingFetcher:
@@ -501,6 +537,87 @@ class TestCallLlmForWindowRetry:
         assert error is None
 
 
+class TestEmptyCompletionGuard:
+    """Empty LLM completions are retried and surfaced as failed, not '[]' (issue #358)."""
+
+    @staticmethod
+    def _resp(content):
+        from unittest.mock import MagicMock
+        r = MagicMock()
+        r.content = content
+        return r
+
+    def test_completion_is_empty_helper(self):
+        from utils.llm_call import _completion_is_empty
+        assert _completion_is_empty(self._resp(None)) is True
+        assert _completion_is_empty(self._resp("")) is True
+        assert _completion_is_empty(self._resp("  \n ")) is True
+        assert _completion_is_empty(self._resp("[]")) is False
+
+    def test_persistently_empty_completion_fails_window(self):
+        from unittest.mock import MagicMock, patch
+        from ad_detector import AdDetector
+        from utils.llm_call import EmptyCompletionError
+
+        detector = AdDetector.__new__(AdDetector)
+        detector._llm_client = MagicMock()
+        detector._llm_client.messages_create.return_value = self._resp("")
+
+        with patch('utils.llm_call.calculate_backoff', return_value=0.0), \
+             patch('utils.llm_call.time.sleep'):
+            response, error = detector._call_llm_for_window(
+                model="test-model", system_prompt="s", prompt="p",
+                max_retries=1, llm_timeout=10, slug="t", episode_id="ep1",
+                window_label="Window 1", pass_name="ad_detection_pass_1",
+            )
+
+        assert response is None
+        assert isinstance(error, EmptyCompletionError)
+        # It retried rather than accepting the first empty response.
+        assert detector._llm_client.messages_create.call_count > 1
+
+    def test_empty_then_valid_completion_succeeds(self):
+        from unittest.mock import MagicMock, patch
+        from ad_detector import AdDetector
+
+        detector = AdDetector.__new__(AdDetector)
+        detector._llm_client = MagicMock()
+        good = self._resp("[]")
+        detector._llm_client.messages_create.side_effect = [self._resp(""), good]
+
+        with patch('utils.llm_call.calculate_backoff', return_value=0.0), \
+             patch('utils.llm_call.time.sleep'):
+            response, error = detector._call_llm_for_window(
+                model="test-model", system_prompt="s", prompt="p",
+                max_retries=1, llm_timeout=10, slug="t", episode_id="ep1",
+                window_label="Window 1", pass_name="ad_detection_pass_1",
+            )
+
+        assert response is good
+        assert error is None
+
+    def test_valid_empty_array_is_not_a_failure(self):
+        # '[]' is a real "no ads" answer, not an empty completion.
+        from unittest.mock import MagicMock, patch
+        from ad_detector import AdDetector
+
+        detector = AdDetector.__new__(AdDetector)
+        detector._llm_client = MagicMock()
+        resp = self._resp("[]")
+        detector._llm_client.messages_create.return_value = resp
+
+        with patch('utils.llm_call.time.sleep'):
+            response, error = detector._call_llm_for_window(
+                model="test-model", system_prompt="s", prompt="p",
+                max_retries=1, llm_timeout=10, slug="t", episode_id="ep1",
+                window_label="Window 1", pass_name="ad_detection_pass_1",
+            )
+
+        assert response is resp
+        assert error is None
+        assert detector._llm_client.messages_create.call_count == 1
+
+
 class TestHistoryPageParam:
     """Test history endpoint page parameter conversion."""
 
@@ -601,7 +718,7 @@ class TestLiteLLMFallback:
 
     def _mock_resp(self):
         resp = MagicMock()
-        resp.json = MagicMock(return_value=self.SAMPLE_JSON)
+        resp.iter_content = MagicMock(return_value=[json.dumps(self.SAMPLE_JSON).encode()])
         resp.raise_for_status = MagicMock()
         return resp
 

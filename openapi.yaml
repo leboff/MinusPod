@@ -12,7 +12,7 @@ info:
     - Monitor system status and trigger cleanup operations
     - Manage cross-episode ad patterns with network and podcast scope
     - Submit corrections to improve ad detection accuracy
-  version: 2.5.18
+  version: 2.8.13
   contact:
     name: MinusPod
   license:
@@ -463,6 +463,17 @@ paths:
                     - boolean
                     - 'null'
                   description: Override auto-process setting (null uses global)
+                languageOverride:
+                  type:
+                    - string
+                    - 'null'
+                  description: Per-feed Whisper transcription language. 'auto' pins auto-detect for this feed; a language code (e.g. 'en', 'de') forces that language; null falls back to the global whisperLanguage setting.
+                titleOverride:
+                  type:
+                    - string
+                    - 'null'
+                  maxLength: 500
+                  description: Per-feed display title shown to subscribers in the generated RSS feed (issue 375). Survives RSS refreshes. Null or empty clears it and falls back to the source feed title.
                 maxEpisodes:
                   type:
                     - integer
@@ -543,8 +554,29 @@ paths:
       tags:
         - Feeds
       summary: Refresh all feeds
-      description: Refresh RSS feeds for all configured podcasts
+      description: |
+        Refresh RSS feeds for all configured podcasts. By default this
+        sends a conditional GET per feed -- if upstream returns 304 Not
+        Modified, that feed is a no-op. Pass `{"force": true}` in the
+        body to clear every podcast's stored ETag / Last-Modified before
+        fetching so upstream cannot short-circuit with 304.
       operationId: refreshAllFeeds
+      requestBody:
+        required: false
+        description: Optional force-refresh flag. Omit for default conditional GET per feed.
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                force:
+                  type: boolean
+                  description: |
+                    When true, clears every podcast's stored ETag +
+                    Last-Modified values before fetching so upstream
+                    cannot short-circuit with 304 Not Modified.
+                  default: false
+              additionalProperties: false
       responses:
         '200':
           description: All feeds refreshed
@@ -579,6 +611,29 @@ paths:
               schema:
                 type: string
                 format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /feeds/{slug}/ad-distribution:
+    get:
+      tags:
+        - Feeds
+      summary: Get a feed's ad-position distribution
+      description: >
+        Returns where this feed's ad cuts have historically landed across an
+        episode, as a normalized-position histogram plus the learned prior
+        zones. Setting-independent: returns data even when the positional-prior
+        experiment is disabled.
+      operationId: getAdDistribution
+      parameters:
+        - $ref: '#/components/parameters/slug'
+      responses:
+        '200':
+          description: Ad distribution for the feed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AdDistribution'
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -877,10 +932,12 @@ paths:
         - Episodes
       summary: Force reprocess an episode
       description: |
-        Deletes all cached data (audio, transcript, ads) and reprocesses the episode.
-        Supports two modes:
+        Deletes cached data and reprocesses the episode.
+        Supports three modes:
         - `reprocess` (default): Uses learned patterns from the pattern database plus AI analysis
         - `full`: Skips the pattern database entirely for a fresh AI-only analysis
+        - `llm`: Re-runs ad detection and re-cut using the SAVED transcript,
+          skipping re-transcription. Returns 400 if no transcript exists.
 
         Reprocessed episodes are prioritized in the processing queue.
       operationId: reprocessEpisode
@@ -896,12 +953,14 @@ paths:
               properties:
                 mode:
                   type: string
-                  enum: [reprocess, full]
+                  enum: [reprocess, full, llm]
                   default: reprocess
                   description: |
                     Processing mode:
                     - reprocess: Use pattern DB + AI (leverages learned patterns)
                     - full: AI only, skip pattern DB (fresh analysis)
+                    - llm: Re-detect + re-cut using the saved transcript (skips
+                      re-transcription); requires an existing transcript
       responses:
         '200':
           description: Episode reprocessing started
@@ -991,12 +1050,14 @@ paths:
               properties:
                 mode:
                   type: string
-                  enum: [reprocess, full]
+                  enum: [reprocess, full, llm]
                   default: reprocess
                   description: |
                     Processing mode:
                     - reprocess: Use pattern DB + AI (leverages learned patterns)
                     - full: AI only, skip pattern DB (fresh analysis)
+                    - llm: Re-detect + re-cut using each saved transcript (skips
+                      re-transcription); episodes without a transcript are skipped
       responses:
         '200':
           description: Episodes queued for reprocessing
@@ -2190,7 +2251,7 @@ paths:
       tags:
         - Sponsors
       summary: Update a sponsor
-      description: Update sponsor properties like name, aliases, or category
+      description: Update sponsor properties. Any subset of the fields may be sent.
       operationId: updateSponsor
       parameters:
         - $ref: '#/components/parameters/sponsor_id'
@@ -2209,6 +2270,19 @@ paths:
                     type: string
                 category:
                   type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: Community tags for grouping and filtering
+                common_ctas:
+                  type: array
+                  items:
+                    type: string
+                  description: Common calls-to-action associated with this sponsor
+                is_active:
+                  type: boolean
+                  description: Set false to deactivate, true to reactivate
       responses:
         '200':
           description: Sponsor updated
@@ -2227,7 +2301,9 @@ paths:
       tags:
         - Sponsors
       summary: Delete a sponsor
-      description: Deactivate a sponsor (soft delete)
+      description: >-
+        Permanently remove a sponsor. Any ad patterns linked to it are unlinked
+        (their sponsor_id is set to null), not deleted, so no pattern data is lost.
       operationId: deleteSponsor
       parameters:
         - $ref: '#/components/parameters/sponsor_id'
@@ -2241,6 +2317,9 @@ paths:
                 properties:
                   message:
                     type: string
+                  unlinkedPatterns:
+                    type: integer
+                    description: Number of ad patterns that were unlinked
         '404':
           $ref: '#/components/responses/NotFound'
 
@@ -2280,7 +2359,11 @@ paths:
       tags:
         - Sponsors
       summary: Add a normalization rule
-      description: Create a new sponsor name normalization rule using regex pattern matching
+      description: >-
+        Create a sponsor name normalization rule. `terms` is a regex pattern
+        applied case-insensitively; `canonical` is its replacement. The legacy
+        field names `pattern`/`replacement` are still accepted on write. The
+        regex is validated on create and rejected with 400 if invalid.
       operationId: addNormalization
       requestBody:
         required: true
@@ -2289,16 +2372,16 @@ paths:
             schema:
               type: object
               required:
-                - pattern
-                - replacement
+                - terms
+                - canonical
                 - category
               properties:
-                pattern:
+                terms:
                   type: string
-                  description: Regex pattern to match against sponsor names
-                replacement:
+                  description: Regex pattern to match (legacy alias - pattern)
+                canonical:
                   type: string
-                  description: Canonical replacement name
+                  description: Replacement text (legacy alias - replacement)
                 category:
                   type: string
                   enum: [sponsor, url, number, phrase]
@@ -2323,7 +2406,10 @@ paths:
       tags:
         - Sponsors
       summary: Update a normalization rule
-      description: Update an existing normalization rule's pattern, replacement, or category
+      description: >-
+        Update a normalization rule. Any subset of fields may be sent. The
+        legacy field names `pattern`/`replacement` are still accepted in place
+        of `terms`/`canonical`.
       operationId: updateNormalization
       parameters:
         - $ref: '#/components/parameters/norm_id'
@@ -2334,12 +2420,12 @@ paths:
             schema:
               type: object
               properties:
-                pattern:
+                terms:
                   type: string
-                  description: Regex pattern to match
-                replacement:
+                  description: Regex pattern to match (legacy alias - pattern)
+                canonical:
                   type: string
-                  description: Canonical replacement name
+                  description: Replacement text (legacy alias - replacement)
                 category:
                   type: string
                   enum: [sponsor, url, number, phrase]
@@ -2793,13 +2879,6 @@ paths:
                   type: string
                   description: Model name to use with the Whisper API (only used when whisperBackend is openai-api)
                   example: whisper-1
-                whisperApiSkipFlac:
-                  type: boolean
-                  description: |
-                    Skip FLAC compression before upload to the Whisper API. Enable for
-                    self-hosted Whisper servers (e.g. whisper.cpp on localhost) to avoid
-                    an extra encode pass. Can also be set via WHISPER_API_SKIP_FLAC env var.
-                  example: false
                 whisperLanguage:
                   type: string
                   description: |
@@ -2818,6 +2897,15 @@ paths:
                     (Pascal GTX 10xx, Maxwell GTX 9xx) need `int8` or `float32`.
                     See the README section "GPU Compute Type" for the per-GPU table.
                   example: auto
+                positionalPriorEnabled:
+                  type: boolean
+                  description: |
+                    Toggles the learned positional prior experiment (issue
+                    360). When on, feeds with at least 5 processed episodes
+                    get per-feed learned ad-break zones, used as a scrutiny
+                    hint in the detection prompt and as position-based
+                    confidence boosts during validation. Off by default.
+                  example: false
                 vadGapDetectionEnabled:
                   type: boolean
                   description: |
@@ -2851,15 +2939,6 @@ paths:
                     Minimum post-transcript tail gap that the VAD detector
                     will cut when no postroll marker already covers it.
                   example: 3.0
-                audioBitrate:
-                  type: object
-                  properties:
-                    value:
-                      type: string
-                      enum: ['64k', '96k', '128k', '192k', '256k']
-                      description: Output bitrate used when re-encoding processed audio.
-                    isDefault:
-                      type: boolean
                 autoProcessEnabled:
                   type: boolean
                   description: Enable automatic processing of new episodes when feeds refresh
@@ -2884,6 +2963,27 @@ paths:
                   enum: ['64k', '96k', '128k', '192k', '256k']
                   description: Output bitrate used when re-encoding processed audio.
                   example: 128k
+                skipFlacCompression:
+                  type: boolean
+                  description: |
+                    When true, skip the FLAC encode pass before uploading audio
+                    to the Whisper API. Send the preprocessed WAV directly.
+                  example: false
+                adDetectionParallelWindows:
+                  type: integer
+                  minimum: 1
+                  maximum: 32
+                  description: |
+                    Number of transcript windows the ad detector processes
+                    concurrently through the LLM.
+                  example: 4
+                adReviewerParallelAds:
+                  type: integer
+                  minimum: 1
+                  maximum: 32
+                  description: |
+                    Number of ads the reviewer asks the LLM about at the same time.
+                  example: 4
                 llmProvider:
                   type: string
                   description: LLM provider to use (anthropic, openrouter, openai-compatible, ollama)
@@ -3893,7 +3993,7 @@ paths:
                   maxItems: 500
                 action:
                   type: string
-                  enum: [process, reprocess, reprocess_full, delete]
+                  enum: [process, reprocess, reprocess_full, reprocess_llm, delete]
       responses:
         '200':
           description: Bulk action result
@@ -4267,6 +4367,16 @@ paths:
                 properties:
                   updatePatternsFromReviewerAdjustments: { type: boolean }
                   minTrimThreshold: { type: number }
+                  parallelAds:
+                    type: integer
+                    minimum: 1
+                    maximum: 32
+                    description: |
+                      Number of ads the reviewer reviews concurrently via the LLM.
+                      1 preserves the original sequential behavior.
+                  parallelAdsDefault:
+                    type: integer
+                    description: Default value of parallelAds (env-backed registry).
     put:
       summary: Update ad-reviewer auto-update settings
       tags: [Settings]
@@ -4279,6 +4389,13 @@ paths:
               properties:
                 updatePatternsFromReviewerAdjustments: { type: boolean }
                 minTrimThreshold: { type: number, minimum: 1, maximum: 120 }
+                parallelAds:
+                  type: integer
+                  minimum: 1
+                  maximum: 32
+                  description: |
+                    Number of ads the reviewer reviews concurrently. Range 1-32,
+                    default 4.
       responses:
         '200':
           description: Updated settings
@@ -4488,6 +4605,49 @@ components:
         manifest_version: { type: string }
         fetched_at: { type: string }
 
+    AdDistribution:
+      type: object
+      description: A feed's historical ad-cut position distribution (issue 360)
+      properties:
+        slug:
+          type: string
+        episodesConsidered:
+          type: integer
+          description: Episodes with usable cut history that fed the distribution
+        medianDurationSeconds:
+          type: number
+          description: Median original episode duration across those episodes
+        bucketCount:
+          type: integer
+          description: Number of normalized-position histogram bins
+        buckets:
+          type: array
+          description: Cut-start counts per bin, ordered start to end of episode
+          items:
+            type: integer
+        totalEvents:
+          type: integer
+          description: Total cut starts counted (equals the sum of buckets)
+        zones:
+          type: array
+          description: Learned prior zones (empty below 5 episodes / 60% support)
+          items:
+            type: object
+            properties:
+              center:
+                type: number
+                description: Median normalized position of the zone (0.0-1.0)
+              low:
+                type: number
+              high:
+                type: number
+              support:
+                type: integer
+                description: Distinct episodes with a cut in this zone
+              boost:
+                type: number
+                description: Confidence boost applied to cuts in this zone
+
     Feed:
       type: object
       properties:
@@ -4530,6 +4690,16 @@ components:
             - boolean
             - 'null'
           description: Override auto-process setting for this feed (null uses global setting)
+        languageOverride:
+          type:
+            - string
+            - 'null'
+          description: Per-feed Whisper transcription language ('auto' or a language code like 'en'/'de'); null uses the global whisperLanguage setting.
+        titleOverride:
+          type:
+            - string
+            - 'null'
+          description: Per-feed display title shown to subscribers in the generated RSS feed (issue 375); null falls back to the source feed title.
         maxEpisodes:
           type:
             - integer
@@ -4845,14 +5015,6 @@ components:
               description: Model name to use with the Whisper API
             isDefault:
               type: boolean
-        whisperApiSkipFlac:
-          type: object
-          properties:
-            value:
-              type: boolean
-              description: Skip FLAC compression before upload to the Whisper API
-            isDefault:
-              type: boolean
         whisperLanguage:
           type: object
           properties:
@@ -4871,6 +5033,14 @@ components:
                 Compute precision for the local faster-whisper backend. `auto` resolves to float16
                 on CUDA and int8 on CPU; older GPUs automatically fall back through the chain
                 int8_float16 -> int8 -> float32 when float16 init fails.
+            isDefault:
+              type: boolean
+        positionalPriorEnabled:
+          type: object
+          properties:
+            value:
+              type: boolean
+              description: Toggles the learned positional prior experiment (off by default).
             isDefault:
               type: boolean
         vadGapDetectionEnabled:
@@ -4911,6 +5081,31 @@ components:
             value:
               type: string
               enum: ['64k', '96k', '128k', '192k', '256k']
+            isDefault:
+              type: boolean
+        skipFlacCompression:
+          type: object
+          properties:
+            value:
+              type: boolean
+            isDefault:
+              type: boolean
+        adDetectionParallelWindows:
+          type: object
+          properties:
+            value:
+              type: integer
+              minimum: 1
+              maximum: 32
+            isDefault:
+              type: boolean
+        adReviewerParallelAds:
+          type: object
+          properties:
+            value:
+              type: integer
+              minimum: 1
+              maximum: 32
             isDefault:
               type: boolean
         autoProcessEnabled:
@@ -5020,13 +5215,13 @@ components:
               type: string
             whisperApiModel:
               type: string
-            whisperApiSkipFlac:
-              type: boolean
             whisperLanguage:
               type: string
             whisperComputeType:
               type: string
               enum: [auto, float16, int8_float16, int8, float32]
+            positionalPriorEnabled:
+              type: boolean
             vadGapDetectionEnabled:
               type: boolean
             vadGapStartMinSeconds:
@@ -5041,6 +5236,16 @@ components:
             audioBitrate:
               type: string
               enum: ['64k', '96k', '128k', '192k', '256k']
+            skipFlacCompression:
+              type: boolean
+            adDetectionParallelWindows:
+              type: integer
+              minimum: 1
+              maximum: 32
+            adReviewerParallelAds:
+              type: integer
+              minimum: 1
+              maximum: 32
             autoProcessEnabled:
               type: boolean
             maxFeedEpisodes:
@@ -5347,13 +5552,24 @@ components:
           items:
             type: string
           description: Common calls to action associated with this sponsor
+        tags:
+          type: array
+          items:
+            type: string
+          description: Community tags applied to this sponsor
         is_active:
           type: boolean
           description: Whether the sponsor is active
-        created_at:
-          type: string
+        pattern_count:
+          type: integer
+          description: Number of active ad patterns linked to this sponsor
+        last_matched_at:
+          type:
+            - string
+            - 'null'
           format: date-time
-        updated_at:
+          description: Most recent time a linked pattern matched, or null if never
+        created_at:
           type: string
           format: date-time
 
@@ -5363,12 +5579,12 @@ components:
         id:
           type: integer
           description: Normalization rule ID
-        pattern:
+        terms:
           type: string
-          description: Regex pattern to match
-        replacement:
+          description: Regex pattern to match (legacy alias - pattern - accepted on write)
+        canonical:
           type: string
-          description: Canonical replacement string
+          description: Canonical replacement string (legacy alias - replacement - accepted on write)
         category:
           type: string
           enum: [sponsor, url, number, phrase]

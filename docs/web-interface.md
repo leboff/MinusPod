@@ -15,6 +15,7 @@ The server includes a web-based management UI at `/ui/`:
 - Bulk actions: select multiple episodes to process, reprocess, reprocess (full), or delete
 - Sort by publish date, episode number, or creation date; paginated (25/50/100/500 per page)
 - Pattern management: view and manage cross-episode ad patterns with sponsor names
+- Sponsor management: view, add, edit, and remove sponsors, each with its linked-pattern count, created and last-matched dates, and tags; plus a tab for name normalization rules
 - Processing history with stats, filtering by podcast, and CSV/JSON export
 - Stats dashboard with charts: avg/min/max metrics, top podcasts by ads, episodes by day, token usage, sortable podcast table
 - Settings for LLM provider, AI models, ad detection prompts, retention, system stats, token usage and cost
@@ -25,6 +26,26 @@ The server includes a web-based management UI at `/ui/`:
 - Podcast search via PodcastIndex.org
 - Multiple dark themes (Tokyo Night, Dracula, Catppuccin, Nord, Gruvbox, Solarized, and more) with light/dark toggle
 - Installable as Progressive Web App (PWA)
+
+### Sponsors and Normalizations
+
+The Sponsors page lists known sponsors, each with its linked ad-pattern count, created date, last-matched date, and tags. You can add and edit a sponsor's name, aliases, category, and tags, toggle it active or inactive, filter by tag, search by name, and reveal inactive sponsors.
+
+Deleting a sponsor is permanent. Ad patterns linked to it are not deleted -- their sponsor link is cleared (unlinked) so no pattern data is lost. The confirmation dialog shows how many patterns will be unlinked first.
+
+A second tab manages name normalizations: regex rules that rewrite messy or inconsistent sponsor names into one canonical form before matching (for example collapsing `ag 1`, `ag-1`, and `ag one` to `ag1`).
+
+#### Normalization regex format
+
+Each rule has two fields: `terms` (the regex to find) and `canonical` (the replacement). Rules are Python regular expressions applied with `re.sub` and the case-insensitive flag, so matching ignores case. A few specifics worth knowing:
+
+- The text is lowercased before the rules run, so write `terms` against lowercase. After all rules run, runs of whitespace are collapsed to single spaces.
+- Patterns are not anchored: they match anywhere in the text. Add `^` and `$` to anchor to the whole string.
+- The replacement's casing decides what the rule does. An all-lowercase `canonical` (e.g. `ag1`) only canonicalizes the name used for matching. A `canonical` containing an uppercase letter (e.g. `Wegovy`) also acts as a transcript display correction, rewriting the visible transcript while preserving the casing around the match.
+- The regex is validated when you save a rule; an invalid pattern is rejected with an error.
+- `category` is one of `sponsor`, `url`, `number`, or `phrase`.
+
+The API exposes these fields as `terms`/`canonical`; the older names `pattern`/`replacement` are still accepted when writing a rule.
 
 ### Ad Editor Workflow
 

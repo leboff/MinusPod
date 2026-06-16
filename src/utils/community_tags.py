@@ -34,6 +34,7 @@ VOCABULARY_VERSION = 1
 # drift on the spelling.
 BUNDLE_FORMAT = 'minuspod-community-submission'
 BUNDLE_VERSION = 1
+BUNDLE_NAME_PREFIX = 'minuspod-submission-'
 
 
 def iter_bundle_patterns(raw):
@@ -132,11 +133,21 @@ def map_itunes_category(category: str) -> str | None:
 
 @lru_cache(maxsize=1)
 def sponsor_seed() -> List[Dict[str, object]]:
-    """List of {name, aliases: List[str], tags: List[str]} from sponsors_final.csv.
+    """List of {name, aliases: List[str], tags: List[str]} read from
+    `src/seed_data/validator_known_sponsors.csv`.
 
-    Names and tags are preserved verbatim. Aliases and tags are pipe-delimited in the CSV.
+    Originally the v2.4.0 DB seed (see `_reseed_known_sponsors`). That
+    migration is now gated by `sponsor_seed_revision = '2.4.0'`, so CSV
+    edits no longer reach existing instances; the in-app `known_sponsors`
+    table is the source of truth on the app side. The only ongoing
+    consumer is the PR validator's multi-sponsor-contamination check
+    (`find_foreign_sponsors`). Add a row only when a brand commonly
+    appears as a foreign mention inside other sponsors' ad copy.
+
+    Names and tags are preserved verbatim. Aliases and tags are
+    pipe-delimited in the CSV.
     """
-    path = os.path.join(_SEED_DIR, 'sponsors_final.csv')
+    path = os.path.join(_SEED_DIR, 'validator_known_sponsors.csv')
     rows: List[Dict[str, object]] = []
     with open(path, 'r', encoding='utf-8') as fh:
         reader = csv.DictReader(fh)
@@ -193,6 +204,13 @@ CANONICAL_STOPWORDS: FrozenSet[str] = frozenset({
     'you', 'your', 'we', 'our', 'my', 'me', 'it', 'its', 'as',
 })
 
+TRAILING_TRUNCATION_STOPWORDS: FrozenSet[str] = frozenset({
+    'a', 'an', 'and', 'at', 'com', 'for', 'in', 'of', 'on', 'or',
+    'slash', 'the', 'to',
+})
+
+DOMAIN_TLDS: FrozenSet[str] = frozenset({'com', 'org', 'net', 'io', 'co'})
+
 CANONICAL_DAYS: FrozenSet[str] = frozenset({
     'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday',
     'mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun',
@@ -230,3 +248,43 @@ def is_tollfree(phone_match: str) -> bool:
     if phone_match.startswith(TOLLFREE_PREFIX_UIFN):
         return True
     return False
+
+
+def slugify(name: str) -> str:
+    """Lowercase, hyphenated, ASCII-safe slug used for community pattern filenames.
+
+    Shared by the exporter (community_export), the PR validator
+    (tools.community_pattern_validator), the scaffold helper, and the
+    bundle-split helper, so the filename a contributor sees on disk is the
+    same one the validator expects.
+    """
+    if not isinstance(name, str):
+        return 'sponsor'
+    s = re.sub(r'[^a-z0-9]+', '-', name.lower())
+    return s.strip('-') or 'sponsor'
+
+
+def app_version() -> str:
+    """Return the running app version, or 'unknown' if version.py is not on path.
+
+    Shared by community_export (bundle metadata) and the manual-contributor
+    scaffold tool so the submitted_app_version field is consistent.
+    """
+    try:
+        from version import __version__  # type: ignore
+        return __version__
+    except Exception:
+        return 'unknown'
+
+
+def expected_filename(sponsor: str, community_id: str) -> str | None:
+    """Build the canonical per-pattern filename: `<slug(sponsor)>-<short_uuid>.json`.
+
+    Returns None when `community_id` is empty -- the caller treats that as a
+    missing required field and reports it through the existing required-field
+    check, not this one.
+    """
+    if not community_id:
+        return None
+    short = community_id.split('-')[0]
+    return f'{slugify(sponsor)}-{short}.json'

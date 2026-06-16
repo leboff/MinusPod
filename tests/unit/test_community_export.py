@@ -240,3 +240,297 @@ def test_pr_url_falls_back_when_too_large():
     url, _, too_large = build_pr_url(payload)
     # Force the size check
     assert (len(url.encode('utf-8')) > URL_LENGTH_LIMIT_BYTES) == too_large
+
+
+def test_build_export_payload_applies_sponsor_override():
+    """An override sponsor replaces the sponsor in the payload and re-classifies."""
+    from community_export import build_export_payload
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Spotify',
+        'aliases': '[]',
+        'tags': '["streaming","universal"]',
+        'is_active': True,
+    }]
+    payload = build_export_payload(pattern, sponsors, override={'sponsor': 'Shopify'})
+    assert payload['sponsor'] == 'Shopify'
+    assert payload['sponsor_aliases'] == []
+
+
+def test_build_export_payload_override_sponsor_must_appear_in_text():
+    """Override sponsor that does not appear in text fails the gate."""
+    from community_export import build_export_payload, ExportError
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Shopify',
+        'aliases': '[]',
+        'tags': '["universal"]',
+        'is_active': True,
+    }]
+    try:
+        build_export_payload(pattern, sponsors, override={'sponsor': 'NotInTheText'})
+    except ExportError as e:
+        assert any('sponsor name' in r and 'does not appear' in r for r in e.reasons)
+    else:
+        raise AssertionError('expected ExportError')
+
+
+def test_build_export_payload_alias_override_clears_aliases():
+    """Override sponsor_aliases to an empty list clears all aliases."""
+    from community_export import build_export_payload
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Shopify',
+        'aliases': '["Shop"]',
+        'tags': '["universal"]',
+        'is_active': True,
+    }]
+    payload = build_export_payload(pattern, sponsors, override={'sponsor_aliases': []})
+    assert payload['sponsor_aliases'] == []
+
+
+def test_build_export_payload_tag_override_re_validates():
+    """Override sponsor_tags to include an unknown tag triggers rejection."""
+    from community_export import build_export_payload, ExportError
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Shopify',
+        'aliases': '[]',
+        'tags': '["universal"]',
+        'is_active': True,
+    }]
+    try:
+        build_export_payload(pattern, sponsors, override={'sponsor_tags': ['universal', 'made_up_tag']})
+    except ExportError as e:
+        assert any('made_up_tag' in r for r in e.reasons)
+    else:
+        raise AssertionError('expected ExportError')
+
+
+def test_build_export_payload_no_override_unchanged():
+    """No override = same behavior as before this task."""
+    from community_export import build_export_payload
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Shopify',
+        'aliases': '["Shop"]',
+        'tags': '["universal"]',
+        'is_active': True,
+    }]
+    payload = build_export_payload(pattern, sponsors)
+    assert payload['sponsor'] == 'Shopify'
+    assert payload['sponsor_aliases'] == ['Shop']
+    assert payload['sponsor_tags'] == ['universal']
+
+
+def _shopify_bundle_db(local_sponsor_name='Spotify'):
+    """Shared fixture for the build_bundle override tests. Pattern text
+    mentions Shopify; the DB sponsor row defaults to the (wrong) 'Spotify'
+    classifier result so a Shopify override exercises the rewrite path."""
+    sponsor = _sponsor(name=local_sponsor_name, tags=['universal'], sponsor_id=99)
+    pattern = _pattern(
+        id=1,
+        sponsor_id=99,
+        text='Shopify is the commerce platform behind millions of businesses around the world.',
+        intro_variants=json.dumps([]),
+    )
+    return _FakeDB(patterns_by_id={1: pattern}, sponsors=[sponsor])
+
+
+def test_build_bundle_applies_per_pattern_overrides():
+    """build_bundle threads overrides[pattern_id] to each build_export_payload call."""
+    from community_export import build_bundle
+    bundle, rejected = build_bundle(
+        [1], _shopify_bundle_db(), overrides={1: {'sponsor': 'Shopify'}},
+    )
+    assert rejected == []
+    assert bundle['patterns'][0]['sponsor'] == 'Shopify'
+
+
+def test_build_bundle_overrides_for_unknown_pattern_id_ignored():
+    """An override entry whose key is not in the input ids is dropped silently."""
+    from community_export import build_bundle
+    bundle, rejected = build_bundle(
+        [1], _shopify_bundle_db(local_sponsor_name='Shopify'),
+        overrides={9999: {'sponsor': 'Ignored'}},
+    )
+    assert rejected == []
+    assert bundle['patterns'][0]['sponsor'] == 'Shopify'
+
+
+def test_build_bundle_no_overrides_unchanged():
+    """No overrides arg = same behavior as before this task."""
+    from community_export import build_bundle
+    bundle, rejected = build_bundle(
+        [1], _shopify_bundle_db(local_sponsor_name='Shopify'),
+    )
+    assert rejected == []
+    assert bundle['patterns'][0]['sponsor'] == 'Shopify'
+
+
+def test_coerce_overrides_accepts_int_keys_and_filters_unknown_keys():
+    """The route helper coerces string-keyed JSON into an int-keyed dict
+    and drops any field that is not sponsor / sponsor_aliases / sponsor_tags."""
+    from api.patterns import _coerce_overrides
+    raw = {
+        '1': {'sponsor': 'Shopify', 'sponsor_aliases': ['Shop'], 'sponsor_tags': ['universal']},
+        '2': {'sponsor': 'Hims.com', 'unsupported_field': 'ignored'},
+        'not_an_int': {'sponsor': 'X'},
+    }
+    out = _coerce_overrides(raw)
+    assert out == {
+        1: {'sponsor': 'Shopify', 'sponsor_aliases': ['Shop'], 'sponsor_tags': ['universal']},
+        2: {'sponsor': 'Hims.com'},
+    }
+
+
+def test_coerce_overrides_returns_none_when_missing():
+    from api.patterns import _coerce_overrides
+    assert _coerce_overrides(None) is None
+    assert _coerce_overrides({}) == {}
+
+
+def test_coerce_overrides_rejects_non_dict():
+    from api.patterns import _coerce_overrides
+    try:
+        _coerce_overrides([1, 2, 3])
+    except ValueError as e:
+        assert 'object' in str(e).lower()
+    else:
+        raise AssertionError('expected ValueError')
+
+
+def test_build_export_payload_override_string_tags_does_not_explode_to_chars():
+    """A malformed string-shaped sponsor_tags override is treated as 'no tag override'
+    rather than coerced into a per-character list."""
+    from community_export import build_export_payload
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Shopify',
+        'aliases': '[]',
+        'tags': '["universal"]',
+        'is_active': True,
+    }]
+    payload = build_export_payload(
+        pattern, sponsors, override={'sponsor_tags': 'universal'}
+    )
+    # The bad string is ignored, so the payload keeps the sponsor-row tags.
+    assert payload['sponsor_tags'] == ['universal']
+
+
+def test_build_export_payload_whitespace_only_sponsor_override_falls_back_to_db():
+    """An override that sets sponsor to '' or '   ' falls back to the DB sponsor
+    in the payload (matching the gate's resolution)."""
+    from community_export import build_export_payload
+    pattern = {
+        'id': 1,
+        'sponsor_id': 99,
+        'text_template': 'Shopify is the commerce platform behind millions of businesses.',
+        'intro_variants': [],
+        'outro_variants': [],
+        'avg_duration': 30.0,
+        'confirmation_count': 1,
+        'false_positive_count': 0,
+        'source_language': None,
+    }
+    sponsors = [{
+        'id': 99,
+        'name': 'Shopify',
+        'aliases': '[]',
+        'tags': '["universal"]',
+        'is_active': True,
+    }]
+    payload = build_export_payload(pattern, sponsors, override={'sponsor': '   '})
+    assert payload['sponsor'] == 'Shopify'
+
+
+def test_coerce_overrides_drops_non_string_sponsor():
+    """A non-string sponsor field is dropped silently so downstream code
+    does not crash on `.strip()` against an int / list / None."""
+    from api.patterns import _coerce_overrides
+    out = _coerce_overrides({
+        '1': {'sponsor': 42, 'sponsor_aliases': ['Shop']},
+        '2': {'sponsor': None, 'sponsor_tags': ['universal']},
+    })
+    assert out == {
+        1: {'sponsor_aliases': ['Shop']},
+        2: {'sponsor_tags': ['universal']},
+    }
+
+
+def test_coerce_overrides_drops_non_list_aliases_and_tags():
+    """A non-list sponsor_aliases / sponsor_tags is dropped silently so
+    downstream code does not explode a string into per-char tag values."""
+    from api.patterns import _coerce_overrides
+    out = _coerce_overrides({
+        '1': {'sponsor_aliases': 'Shop'},
+        '2': {'sponsor_tags': 'universal'},
+        '3': {'sponsor_tags': ['universal', 42]},
+    })
+    assert out == {1: {}, 2: {}, 3: {}}

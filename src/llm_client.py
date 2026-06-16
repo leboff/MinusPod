@@ -39,6 +39,7 @@ from config import (
     LLM_TIMEOUT_LOCAL,
     LLM_RETRY_MAX_RETRIES,
     LLM_RETRY_MAX_RETRIES_LOCAL,
+    DEFAULT_OPENAI_BASE_URL,
     OPENROUTER_BASE_URL,
     OPENROUTER_HTTP_REFERER,
     OPENROUTER_APP_TITLE,
@@ -226,7 +227,7 @@ def get_effective_base_url() -> str:
     db_val = _get_cached_setting('openai_base_url')
     if db_val:
         return db_val
-    return os.environ.get('OPENAI_BASE_URL', 'http://localhost:8000/v1')
+    return os.environ.get('OPENAI_BASE_URL', DEFAULT_OPENAI_BASE_URL)
 
 
 def invalidate_provider_cache() -> None:
@@ -630,7 +631,7 @@ class OpenAICompatibleClient(LLMClient):
         extra_headers: Optional[Dict[str, str]] = None
     ):
         super().__init__()
-        self.base_url = base_url or os.environ.get('OPENAI_BASE_URL', 'http://localhost:8000/v1')
+        self.base_url = base_url or os.environ.get('OPENAI_BASE_URL', DEFAULT_OPENAI_BASE_URL)
         self.api_key = api_key or get_effective_openai_api_key()
         self.default_model = default_model or os.environ.get('OPENAI_MODEL', 'claude-sonnet-4-5-20250929')
         self.extra_headers = extra_headers or {}
@@ -1031,41 +1032,79 @@ def _current_config_key() -> str:
 # Circuit breaker for LLM API calls (one per process, shared across threads)
 _llm_circuit_breaker = CircuitBreaker("llm-api", failure_threshold=5, recovery_timeout=60)
 
-# Per-episode token accumulator using thread-local storage.
-# Each thread (background processor, HTTP handler) gets its own
-# independent accumulator so concurrent callers cannot corrupt each other.
-_episode_accumulator = threading.local()
+# Per-episode token accumulator.
+#
+# Backed by a single lock-protected object rather than thread-local storage
+# so that ad-detection windows running on a ThreadPoolExecutor (2.5.23+) all
+# contribute to the same totals. The processing queue (fcntl flock on
+# .processing_queue.lock) guarantees only one episode is mid-accumulation at
+# any time per gunicorn worker process, so a single accumulator is correct.
+class _EpisodeAccumulator:
+    def __init__(self):
+        self._lock = threading.Lock()
+        self.active = False
+        self.input_tokens = 0
+        self.output_tokens = 0
+        self.cost = 0.0
+
+    def start(self):
+        with self._lock:
+            self.active = True
+            self.input_tokens = 0
+            self.output_tokens = 0
+            self.cost = 0.0
+
+    def add(self, input_tokens: int, output_tokens: int, cost: float) -> None:
+        with self._lock:
+            if not self.active:
+                return
+            self.input_tokens += input_tokens
+            self.output_tokens += output_tokens
+            self.cost += cost
+
+    def is_active(self) -> bool:
+        with self._lock:
+            return self.active
+
+    def collect_and_reset(self) -> Dict:
+        with self._lock:
+            totals = {
+                'input_tokens': self.input_tokens,
+                'output_tokens': self.output_tokens,
+                'cost': self.cost,
+            }
+            self.active = False
+            self.input_tokens = 0
+            self.output_tokens = 0
+            self.cost = 0.0
+        return totals
+
+
+_episode_accumulator = _EpisodeAccumulator()
 
 
 def _get_accumulator_active() -> bool:
-    """Return whether the current thread's accumulator is active."""
-    return getattr(_episode_accumulator, 'active', False)
+    """Return whether the per-episode accumulator is currently active."""
+    return _episode_accumulator.is_active()
 
 
 def start_episode_token_tracking():
-    """Reset and activate the per-episode token accumulator for the current thread."""
-    _episode_accumulator.active = True
-    _episode_accumulator.input_tokens = 0
-    _episode_accumulator.output_tokens = 0
-    _episode_accumulator.cost = 0.0
+    """Reset and activate the per-episode token accumulator.
+
+    Safe to call from any thread; updates from any thread will be aggregated
+    until ``get_episode_token_totals()`` is invoked.
+    """
+    _episode_accumulator.start()
     logger.info(f"Episode token tracking: ACTIVATED (thread={threading.current_thread().name})")
 
 
 def get_episode_token_totals() -> Dict:
-    """Return accumulated totals, deactivate, and reset the accumulator for the current thread."""
-    totals = {
-        'input_tokens': getattr(_episode_accumulator, 'input_tokens', 0),
-        'output_tokens': getattr(_episode_accumulator, 'output_tokens', 0),
-        'cost': getattr(_episode_accumulator, 'cost', 0.0),
-    }
+    """Return accumulated totals, deactivate, and reset the accumulator."""
+    totals = _episode_accumulator.collect_and_reset()
     logger.info(
         f"Episode token totals: in={totals['input_tokens']} out={totals['output_tokens']}"
         f" cost=${totals['cost']:.6f} (thread={threading.current_thread().name})"
     )
-    _episode_accumulator.active = False
-    _episode_accumulator.input_tokens = 0
-    _episode_accumulator.output_tokens = 0
-    _episode_accumulator.cost = 0.0
     return totals
 
 
@@ -1092,10 +1131,7 @@ def _record_token_usage(model: str, usage: Dict):
         f" cost=${cost:.6f} accum_active={accum_active}"
         f" (thread={threading.current_thread().name})"
     )
-    if accum_active:
-        _episode_accumulator.input_tokens += input_tokens
-        _episode_accumulator.output_tokens += output_tokens
-        _episode_accumulator.cost += cost
+    _episode_accumulator.add(input_tokens, output_tokens, cost)
 
 
 def get_llm_client(force_new: bool = False) -> LLMClient:
@@ -1354,6 +1390,37 @@ def is_auth_error(error: Exception) -> bool:
     except ImportError:
         pass
     return False
+
+
+def is_not_found_error(error: Exception) -> bool:
+    """Check if error is a model/resource not-found failure (404).
+
+    A not-found usually means the configured model ID is wrong or the provider's
+    advertised model list is incomplete, so retrying will not help. Works with
+    both Anthropic and OpenAI error types, with a status-code and string fallback
+    for wrapped errors.
+    """
+    if error is None:
+        return False
+    if ANTHROPIC_ERRORS_AVAILABLE:
+        from anthropic import APIError, NotFoundError
+        if isinstance(error, NotFoundError):
+            return True
+        if isinstance(error, APIError) and getattr(error, 'status_code', None) == 404:
+            return True
+    try:
+        from openai import NotFoundError as OpenAINotFoundError
+        from openai import APIError as OpenAIAPIError
+        if isinstance(error, OpenAINotFoundError):
+            return True
+        if isinstance(error, OpenAIAPIError) and getattr(error, 'status_code', None) == 404:
+            return True
+    except ImportError:
+        pass
+    if getattr(error, 'status_code', None) == 404:
+        return True
+    err_text = str(error).lower()
+    return 'not_found' in err_text or 'not found' in err_text
 
 
 def is_rate_limit_error(error: Exception) -> bool:

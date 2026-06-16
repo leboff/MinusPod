@@ -92,6 +92,63 @@ class TestResetSettingSecretKeys:
         assert db.get_setting('whisper_model') is not None
 
 
+class TestReviewerPromptReset:
+    """Issue #301: the Ad Reviewer review/resurrect prompts were missing from
+    reset_setting's defaults dict, so the reset button was a silent no-op and a
+    cleared-then-saved prompt stayed blank forever. These lock in that reset
+    works for all four prompts and that a blank save reverts to default."""
+
+    def test_reset_setting_restores_reviewer_prompt_defaults(self):
+        db = database.Database()
+        db.set_setting('review_prompt', 'custom review', is_default=False)
+        db.set_setting('resurrect_prompt', 'custom resurrect', is_default=False)
+
+        assert db.reset_setting('review_prompt') is True
+        assert db.reset_setting('resurrect_prompt') is True
+        assert db.get_setting('review_prompt') == database.DEFAULT_REVIEW_PROMPT
+        assert db.get_setting('resurrect_prompt') == database.DEFAULT_RESURRECT_PROMPT
+
+    def test_prompts_reset_endpoint_restores_reviewer_prompts(self, client):
+        db = database.Database()
+        db.set_setting('review_prompt', 'custom review', is_default=False)
+        db.set_setting('resurrect_prompt', 'custom resurrect', is_default=False)
+
+        response = client.post('/api/v1/settings/prompts/reset')
+        assert response.status_code == 200, response.data
+
+        data = json.loads(client.get('/api/v1/settings').data)
+        assert data['reviewPrompt']['value'] == database.DEFAULT_REVIEW_PROMPT
+        assert data['reviewPrompt']['isDefault'] is True
+        assert data['resurrectPrompt']['value'] == database.DEFAULT_RESURRECT_PROMPT
+        assert data['resurrectPrompt']['isDefault'] is True
+
+    def test_blank_reviewer_prompt_save_reverts_to_default(self, client):
+        db = database.Database()
+        db.set_setting('review_prompt', 'custom review', is_default=False)
+
+        response = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'reviewPrompt': '', 'resurrectPrompt': '   '}),
+            content_type='application/json',
+        )
+        assert response.status_code == 200, response.data
+
+        data = json.loads(client.get('/api/v1/settings').data)
+        assert data['reviewPrompt']['value'] == database.DEFAULT_REVIEW_PROMPT
+        assert data['reviewPrompt']['isDefault'] is True
+        assert data['resurrectPrompt']['value'] == database.DEFAULT_RESURRECT_PROMPT
+        assert data['resurrectPrompt']['isDefault'] is True
+
+    def test_non_string_prompt_payload_does_not_500(self, client):
+        # A wrong-typed value must not crash the blank-check .strip() (regression).
+        response = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'reviewPrompt': 5}),
+            content_type='application/json',
+        )
+        assert response.status_code != 500, response.data
+
+
 class TestWebhookUrlValidation:
     """Issue #158: webhooks must accept private-IP / non-default-port URLs
     (the OPERATOR_CONFIGURED trust posture used by LLM and Whisper base URLs)
@@ -180,25 +237,6 @@ class TestPartialUpdatePreservesOtherFields:
         assert db.get_setting('whisper_backend') == 'local'
         assert db.get_setting('whisper_api_base_url') == ''
         assert db.get_setting('whisper_api_model') == 'whisper-1'
-
-    def test_whisper_api_skip_flac_persists_as_bool_string(self, client):
-        db = database.Database()
-
-        response = client.put(
-            '/api/v1/settings/ad-detection',
-            data=json.dumps({'whisperApiSkipFlac': True}),
-            content_type='application/json',
-        )
-        assert response.status_code == 200, response.data
-        assert db.get_setting('whisper_api_skip_flac') == 'true'
-
-        response = client.put(
-            '/api/v1/settings/ad-detection',
-            data=json.dumps({'whisperApiSkipFlac': False}),
-            content_type='application/json',
-        )
-        assert response.status_code == 200, response.data
-        assert db.get_setting('whisper_api_skip_flac') == 'false'
 
 
 class TestProviderChangeModelPruning:
@@ -329,3 +367,152 @@ class TestAudioBitrateValidation:
         data = self._get_settings(client)
         assert data['audioBitrate']['value'] == '128k'
         assert data['audioBitrate']['isDefault'] is True
+
+
+class TestSkipFlacCompressionValidation:
+    """skipFlacCompression boolean round-trip + reset.
+
+    The toggle lives in `_apply_whisper_fields` and only matters when the
+    Whisper API backend is selected, but the setting itself is global so it
+    is exercised here regardless of backend.
+    """
+
+    def _get_settings(self, client):
+        resp = client.get('/api/v1/settings')
+        assert resp.status_code == 200
+        return json.loads(resp.data)
+
+    def test_get_exposes_skip_flac_with_default_false(self, client):
+        data = self._get_settings(client)
+        assert 'skipFlacCompression' in data
+        assert data['skipFlacCompression']['value'] is False
+        assert data['skipFlacCompression']['isDefault'] is True
+        assert data['defaults']['skipFlacCompression'] is False
+
+    def test_put_persists_true_as_bool(self, client):
+        resp = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'skipFlacCompression': True}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+
+        data = self._get_settings(client)
+        assert data['skipFlacCompression']['value'] is True
+        assert data['skipFlacCompression']['isDefault'] is False
+
+    def test_put_accepts_truthy_strings(self, client):
+        for raw in ('true', '1', 'yes', 'TRUE', 'Yes'):
+            resp = client.put(
+                '/api/v1/settings/ad-detection',
+                data=json.dumps({'skipFlacCompression': raw}),
+                content_type='application/json',
+            )
+            assert resp.status_code == 200, raw
+            assert self._get_settings(client)['skipFlacCompression']['value'] is True
+
+    def test_put_accepts_falsy_strings(self, client):
+        # First flip it on so we can confirm the falsy path actually turns it off.
+        client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'skipFlacCompression': True}),
+            content_type='application/json',
+        )
+        for raw in ('false', '0', 'no', 'FALSE', 'No'):
+            resp = client.put(
+                '/api/v1/settings/ad-detection',
+                data=json.dumps({'skipFlacCompression': True}),
+                content_type='application/json',
+            )
+            assert resp.status_code == 200
+
+            resp = client.put(
+                '/api/v1/settings/ad-detection',
+                data=json.dumps({'skipFlacCompression': raw}),
+                content_type='application/json',
+            )
+            assert resp.status_code == 200, raw
+            assert self._get_settings(client)['skipFlacCompression']['value'] is False
+
+    def test_reset_restores_false(self, client):
+        client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'skipFlacCompression': True}),
+            content_type='application/json',
+        )
+        assert self._get_settings(client)['skipFlacCompression']['value'] is True
+
+        resp = client.post('/api/v1/settings/ad-detection/reset')
+        assert resp.status_code == 200
+
+        data = self._get_settings(client)
+        assert data['skipFlacCompression']['value'] is False
+        assert data['skipFlacCompression']['isDefault'] is True
+
+
+class TestAdDetectionParallelWindowsValidation:
+    """adDetectionParallelWindows int round-trip, range validator, and reset."""
+
+    def _get_settings(self, client):
+        resp = client.get('/api/v1/settings')
+        assert resp.status_code == 200
+        return json.loads(resp.data)
+
+    def test_get_exposes_default_of_4(self, client):
+        data = self._get_settings(client)
+        assert 'adDetectionParallelWindows' in data
+        assert data['adDetectionParallelWindows']['value'] == 4
+        assert data['adDetectionParallelWindows']['isDefault'] is True
+        assert data['defaults']['adDetectionParallelWindows'] == 4
+
+    def test_put_persists_valid_int(self, client):
+        resp = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'adDetectionParallelWindows': 8}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 200
+
+        data = self._get_settings(client)
+        assert data['adDetectionParallelWindows']['value'] == 8
+        assert data['adDetectionParallelWindows']['isDefault'] is False
+
+    def test_put_rejects_zero(self, client):
+        resp = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'adDetectionParallelWindows': 0}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+        assert 'adDetectionParallelWindows' in json.loads(resp.data)['error']
+
+    def test_put_rejects_over_ceiling(self, client):
+        resp = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'adDetectionParallelWindows': 33}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+
+    def test_put_rejects_non_integer(self, client):
+        resp = client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'adDetectionParallelWindows': 'four'}),
+            content_type='application/json',
+        )
+        assert resp.status_code == 400
+
+    def test_reset_restores_default(self, client):
+        client.put(
+            '/api/v1/settings/ad-detection',
+            data=json.dumps({'adDetectionParallelWindows': 16}),
+            content_type='application/json',
+        )
+        assert self._get_settings(client)['adDetectionParallelWindows']['value'] == 16
+
+        resp = client.post('/api/v1/settings/ad-detection/reset')
+        assert resp.status_code == 200
+
+        data = self._get_settings(client)
+        assert data['adDetectionParallelWindows']['value'] == 4
+        assert data['adDetectionParallelWindows']['isDefault'] is True

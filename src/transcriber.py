@@ -14,7 +14,7 @@ from utils.time import format_vtt_timestamp
 from utils.gpu import clear_gpu_memory, get_available_memory_gb, get_gpu_memory_info
 from utils.url import SSRFError
 from utils.http import safe_url_for_log
-from utils.safe_http import URLTrust, safe_get, safe_post
+from utils.safe_http import URLTrust, safe_get, safe_post, stream_to_file_capped, ResponseTooLargeError
 from utils.subprocess_registry import tracked_run
 from config import (
     API_CHUNK_DURATION_SECONDS,
@@ -37,6 +37,7 @@ from config import (
     HTTP_MAX_REDIRECTS_API,
     HTTP_MAX_REDIRECTS_FEED,
     HTTP_TIMEOUT_WHISPER,
+    coerce_bool_setting,
 )
 
 # Suppress ONNX Runtime warnings before importing faster_whisper
@@ -180,7 +181,7 @@ def extract_audio_chunk(audio_path: str, start_time: float, end_time: float) -> 
             output_path
         ]
 
-        result = subprocess.run(
+        result = tracked_run(
             cmd,
             capture_output=True,
             timeout=FFMPEG_CHUNK_TIMEOUT
@@ -282,7 +283,7 @@ def _get_whisper_settings() -> Dict[str, str]:
     """Read all whisper backend settings from DB with env var fallbacks.
 
     Returns a dict with keys: backend, api_base_url, api_key, api_model,
-    language, skip_flac. Does NOT include compute_type, which is read separately via
+    language. Does NOT include compute_type, which is read separately via
     _get_whisper_compute_type to keep its value out of any dict that also
     holds api_key (CodeQL py/clear-text-logging-sensitive-data).
     """
@@ -292,7 +293,7 @@ def _get_whisper_settings() -> Dict[str, str]:
         'api_key': os.environ.get('WHISPER_API_KEY', ''),
         'api_model': os.environ.get('WHISPER_API_MODEL', 'whisper-1'),
         'language': os.environ.get('WHISPER_LANGUAGE') or 'en',
-        'skip_flac': os.environ.get('WHISPER_API_SKIP_FLAC', 'false'),
+        'skip_flac_compression': coerce_bool_setting(os.environ.get('SKIP_FLAC_COMPRESSION', 'false')),
     }
     try:
         # Inline import: Database depends on modules that import transcriber,
@@ -305,7 +306,6 @@ def _get_whisper_settings() -> Dict[str, str]:
             ('whisper_api_key', 'api_key'),
             ('whisper_api_model', 'api_model'),
             ('whisper_language', 'language'),
-            ('whisper_api_skip_flac', 'skip_flac'),
         ]:
             if setting_key == 'whisper_api_key':
                 val = db.get_secret(setting_key)
@@ -313,6 +313,10 @@ def _get_whisper_settings() -> Dict[str, str]:
                 val = db.get_setting(setting_key)
             if val:
                 defaults[default_key] = val
+
+        skip_flac_raw = db.get_setting('skip_flac_compression')
+        if skip_flac_raw is not None:
+            defaults['skip_flac_compression'] = coerce_bool_setting(skip_flac_raw)
     except Exception as e:
         logger.warning(f"Could not read whisper settings from DB, using env defaults: {e}")
 
@@ -622,6 +626,19 @@ def _whisper_api_rejects_word_timestamps(response) -> bool:
     )
 
 
+def _effective_language(language_override: Optional[str], whisper_settings: Dict[str, str]) -> str:
+    """Resolve the effective Whisper language as a lowercased code.
+
+    A non-empty per-call override beats the global whisper_language setting;
+    blank falls through to the setting; default 'en'. 'auto' is preserved so
+    callers can branch on it.
+    """
+    override = (language_override or '').strip().lower()
+    if override:
+        return override
+    return (whisper_settings.get('language') or 'en').strip().lower()
+
+
 class Transcriber:
     def __init__(self):
         # Model is now managed by singleton
@@ -632,6 +649,7 @@ class Transcriber:
         audio_path: str,
         podcast_name: str = None,
         whisper_settings: Dict[str, str] = None,
+        language_override: Optional[str] = None,
     ) -> Optional[List[Dict]]:
         """Transcribe audio using an OpenAI-compatible whisper API.
 
@@ -663,15 +681,12 @@ class Transcriber:
             preprocessed_path = self.preprocess_audio(audio_path)
             transcribe_path = preprocessed_path if preprocessed_path else audio_path
 
-            skip_flac = str(whisper_settings.get('skip_flac', '')).strip().lower() in ('true', '1', 'yes')
-
             # After preprocessing, compress to FLAC for upload (lossless, ~4-5x smaller than WAV).
             # Prevents 413 errors from APIs with tight upload limits (e.g. OpenRouter).
-            if skip_flac and transcribe_path.endswith('.wav'):
-                logger.info(
-                    "Skipping FLAC compression (whisper_api_skip_flac=true); uploading WAV directly"
-                )
-            if transcribe_path.endswith('.wav') and not skip_flac:
+            # Self-hosted Whisper servers that accept WAV directly can opt out via the
+            # skip_flac_compression setting and avoid the extra encode pass.
+            skip_flac = bool(whisper_settings.get('skip_flac_compression', False))
+            if not skip_flac and transcribe_path.endswith('.wav'):
                 fd, flac_path = tempfile.mkstemp(suffix='.flac')
                 os.close(fd)
                 try:
@@ -711,7 +726,7 @@ class Transcriber:
                 'model': model,
                 'response_format': 'verbose_json',
             }
-            language = (whisper_settings.get('language') or 'en').strip().lower()
+            language = _effective_language(language_override, whisper_settings)
             if language and language != 'auto':
                 form_data_base['language'] = language
             if initial_prompt:
@@ -792,15 +807,8 @@ class Transcriber:
                         "retrying with segment-only timestamps"
                     )
                     continue
-                if response.status_code >= 400:
-                    logger.error(
-                        "Whisper API transcription failed: HTTP %d %s",
-                        response.status_code,
-                        (response.text or '')[:300],
-                    )
-                    return None
-            else:
-                return None
+                # Non-200 with no word-timestamp signal -- give up here.
+                break
 
             if response is None or response.status_code != 200:
                 return None
@@ -1121,11 +1129,20 @@ class Transcriber:
                     return None
                 logger.info(f"Audio file size: {size_mb:.1f}MB")
 
-            # Save to temp file
+            # Cap the stream independent of Content-Length (absent on chunked
+            # responses) so a feed enclosure can't fill the disk (transcription-1).
+            max_bytes = 500 * 1024 * 1024
             with tempfile.NamedTemporaryFile(delete=False, suffix='.mp3') as tmp:
-                for chunk in response.iter_content(chunk_size=8192):
-                    tmp.write(chunk)
                 temp_path = tmp.name
+                try:
+                    stream_to_file_capped(response, tmp, max_bytes)
+                except ResponseTooLargeError:
+                    logger.error(f"Audio stream over {max_bytes // (1024 * 1024)}MB cap: {safe_url_for_log(url)}")
+                    try:
+                        os.unlink(temp_path)
+                    except OSError:
+                        pass
+                    return None
 
             logger.info(f"Downloaded audio to: {temp_path}")
             return temp_path
@@ -1199,11 +1216,19 @@ class Transcriber:
                     return None
                 logger.info(f"Audio file size: {size_mb:.1f}MB")
 
-            # Download with resume support
+            # Cap the total download independent of Content-Length (transcription-1/5).
+            max_bytes = 500 * 1024 * 1024
             mode = 'ab' if downloaded > 0 else 'wb'
             with open(temp_path, mode) as f:
-                for chunk in response.iter_content(chunk_size=8192):
-                    f.write(chunk)
+                try:
+                    stream_to_file_capped(response, f, max_bytes, already=downloaded)
+                except ResponseTooLargeError:
+                    logger.error(f"Audio stream over {max_bytes // (1024 * 1024)}MB cap: {safe_url_for_log(url)}")
+                    try:
+                        os.remove(temp_path)
+                    except OSError:
+                        pass
+                    return None
 
             logger.info(f"Downloaded audio to: {temp_path}")
             return temp_path
@@ -1213,18 +1238,30 @@ class Transcriber:
             # Keep partial file for resume on next attempt
             return None
 
-    def transcribe(self, audio_path: str, podcast_name: str = None) -> List[Dict]:
+    def transcribe(
+        self,
+        audio_path: str,
+        podcast_name: str = None,
+        language_override: Optional[str] = None,
+    ) -> List[Dict]:
         """Transcribe audio file using Faster Whisper with batched pipeline.
 
         Uses adaptive batch sizing based on audio duration to prevent CUDA OOM errors.
         Automatically retries with smaller batch size on OOM.
+
+        `language_override` (when non-empty) takes precedence over the global
+        whisper_language setting for this call only -- used to honor per-feed
+        language overrides without mutating shared settings.
         """
         # Check whisper backend setting
         whisper_settings = _get_whisper_settings()
         if whisper_settings['backend'] == WHISPER_BACKEND_API:
-            return self._transcribe_via_api(audio_path, podcast_name, whisper_settings)
+            return self._transcribe_via_api(
+                audio_path, podcast_name, whisper_settings,
+                language_override=language_override,
+            )
 
-        language_setting = (whisper_settings.get('language') or 'en').strip().lower()
+        language_setting = _effective_language(language_override, whisper_settings)
         transcribe_language = None if language_setting == 'auto' else (language_setting or 'en')
 
         preprocessed_path = None
@@ -1412,7 +1449,12 @@ class Transcriber:
                 except OSError:
                     pass
 
-    def transcribe_chunked(self, audio_path: str, podcast_name: str = None) -> List[Dict]:
+    def transcribe_chunked(
+        self,
+        audio_path: str,
+        podcast_name: str = None,
+        language_override: Optional[str] = None,
+    ) -> List[Dict]:
         """Transcribe audio files with dynamic chunking to prevent OOM errors.
 
         This method:
@@ -1424,6 +1466,9 @@ class Transcriber:
         Args:
             audio_path: Path to the audio file to transcribe
             podcast_name: Optional podcast name for context-aware prompting
+            language_override: Optional per-feed language; when set, takes
+                precedence over the global whisper_language setting for this
+                call only (forwarded to each chunk's transcribe()).
 
         Returns:
             List of transcript segments with timestamps, or None on failure
@@ -1452,7 +1497,7 @@ class Transcriber:
                 f"({chunk_duration/60:.0f}min), trying regular transcription"
             )
             try:
-                result = self.transcribe(audio_path, podcast_name)
+                result = self.transcribe(audio_path, podcast_name, language_override=language_override)
                 if result is not None:
                     return result
                 # If transcribe returns None but didn't raise, fall through to chunked
@@ -1513,7 +1558,7 @@ class Transcriber:
 
             try:
                 # Transcribe chunk (will handle its own batch sizing and retries)
-                chunk_segments = self.transcribe(chunk_path, podcast_name)
+                chunk_segments = self.transcribe(chunk_path, podcast_name, language_override=language_override)
 
                 if chunk_segments is None:
                     failed_chunks.append((chunk_start, chunk_end_with_overlap))
