@@ -199,8 +199,18 @@ benchmark jev-spike --oracle off --enter 0.9 --stay 0.4   # threshold sweep, fre
 Live probabilities are cached in `results/raw/jev_cache.json`, keyed by a hash
 of the request payload, so threshold tuning costs nothing after the first
 pass and editing a question invalidates its entries rather than silently
-scoring stale answers. The cache is committed, so the numbers below reproduce
-without an API key. `TYPESAFE_API_KEY` is only needed to add new entries.
+scoring stale answers.
+
+That file is **gitignored**: at 650KB of JSON it swamped the diff. Populate it
+once with `TYPESAFE_API_KEY` set and every number below reproduces offline
+from then on:
+
+```sh
+TYPESAFE_API_KEY=... benchmark jev-spike --oracle off   # ~$0.022, 171 requests
+```
+
+Rebuilding the multi-pass entries as well (`--passes 5`) costs about $0.11.
+The `--oracle` modes need no key at all.
 
 `--oracle` substitutes the probabilities a *perfect* per-segment judge would
 return, derived from `truth.txt`. That measures the ceiling of the
