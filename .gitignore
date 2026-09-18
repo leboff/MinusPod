@@ -141,6 +141,9 @@ pixelprobe.db
 *.db
 data/
 !benchmarks/llm/data/
+# Cached TypeSafe Jev responses. Regenerates from the corpus for a few cents;
+# too large to be worth reviewing in a diff.
+benchmarks/llm/results/raw/jev_cache.json
 logs/
 sample_media/
 *.log

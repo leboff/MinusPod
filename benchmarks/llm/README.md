@@ -178,6 +178,271 @@ approximate boundaries.
 `benchmark show-prompt` reconstructs a call's prompt using the mode stored on
 that call's record, so it works unmodified for either mode.
 
+## TypeSafe Jev spike (Pass A)
+
+An experimental second detection shape, scored by the same metrics as the
+chat-model rows so the numbers are directly comparable.
+
+Instead of one call per window returning a JSON array of ad spans, it sends
+the window transcript as state and asks **one Noul per segment** ("line L0042
+is advertising, not editorial content"). The reply is a probability per
+segment; `spans_from_probabilities` recovers ad spans by taking contiguous
+runs. Because a run is delimited by segment edges, no timestamp is ever
+generated, and boundaries cannot land off-grid.
+
+```sh
+benchmark jev-spike --oracle overlap    # offline ceiling, no API key, no cost
+benchmark jev-spike --oracle off        # live, replays results/raw/jev_cache.json
+benchmark jev-spike --oracle off --enter 0.9 --stay 0.4   # threshold sweep, free
+```
+
+Live probabilities are cached in `results/raw/jev_cache.json`, keyed by a hash
+of the request payload, so threshold tuning costs nothing after the first
+pass and editing a question invalidates its entries rather than silently
+scoring stale answers.
+
+That file is **gitignored**: at 650KB of JSON it swamped the diff. Populate it
+once with `TYPESAFE_API_KEY` set and every number below reproduces offline
+from then on:
+
+```sh
+TYPESAFE_API_KEY=... benchmark jev-spike --oracle off   # ~$0.022, 171 requests
+```
+
+Rebuilding the multi-pass entries as well (`--passes 5`) costs about $0.11.
+The `--oracle` modes need no key at all.
+
+`--oracle` substitutes the probabilities a *perfect* per-segment judge would
+return, derived from `truth.txt`. That measures the ceiling of the
+decomposition itself, separating "can this shape work" from "is the model
+good enough". Run it before spending anything on a live sweep.
+
+Current ceiling over the 14-episode corpus: **F1 0.991, F0.5 0.996,
+precision 1.000, recall 0.983**, both no-ad controls PASS. For reference the
+best live chat model in `results/report.md` is `claude-haiku-4-5` at F1 0.920
+/ F0.5 0.908, so segment granularity is not the limiting factor.
+
+The single miss is `ep-tosh-show`, where two distinct ad breaks sit 27.7s
+apart with no speech between them. Nothing in the transcript separates them,
+so they merge into one span. `MAX_RUN_GAP_SECONDS` (30s) is the knob: swept
+against the oracle, precision reaches 1.000 at 30s and is flat from there to
+unbounded, because speech between two breaks produces its own low-scoring
+segments and ends the run without help. Only a pure-silence gap can bridge
+two breaks. Lowering it to 15s recovers that one ad but over-splits real
+breaks that contain internal silence, costing more precision than it buys
+recall (mean F0.5 0.925 vs 0.996).
+
+### Live results
+
+One pass over the corpus at the tuned defaults (`--guidance full --metadata`):
+
+| | F1 | F0.5 | Precision | Recall | No-ad controls |
+|---|---|---|---|---|---|
+| Jev (`jev-latest`) | 0.929 | 0.957 | 0.979 | 0.893 | PASS / PASS |
+| `claude-haiku-4-5` | 0.920 | 0.908 | 0.900 | 0.946 | PASS |
+
+**Do not read that as Jev beating Haiku.** Those numbers come from the same
+twelve episodes every parameter was chosen on. Cross-validation (below) is
+the honest view, and the four `state` variants are not separable at this
+corpus size. The defensible claim is that Jev is *competitive with* Haiku at
+roughly 1% of the cost, with the precision/recall balance tilted the way
+MinusPod wants -- it leaves more ads in rather than cutting real content.
+Nine of the twelve ad-bearing episodes score 1.000 and none is below 0.75.
+
+### Stacked ads and the bridge
+
+`ep-drink-champs` was the one bad episode (F0.5 0.481) and every error in it
+came from a single mechanism. It carries the same ad stack three times
+(Airtasker, then a cross-promo for *Decisions Decisions*, then a Kiki Palmer
+episode plug, then OnDeck, then Public), and that cross-promo **plays a clip
+of the show it is advertising**. The clip is two people chatting, so Jev
+scores it 0.05-0.27 -- correctly, line by line -- and the run severs in the
+middle of the break. One truth break became two half-spans, each failing IoU
+0.5: three breaks lost that way produced 3 FN and 6 FP, which was the entire
+error budget for the episode.
+
+`BRIDGE_SECONDS` lets a run cross that much low-scoring **speech** to rejoin.
+An empty gap is never bridged: no segment in the gap means silence, and
+silence between two breaks is exactly what separates them (see
+`ep-tosh-show`, where two breaks sit 27.7s apart with nothing between).
+
+The sweep is flat below 25s and flat again from 28s to 60s+, and at 30s it
+moves exactly one episode:
+
+| episode | bridge 0 | bridge 30 |
+|---|---|---|
+| drink-champs | 0.481 | **1.000** |
+| the other eleven | -- | unchanged, +0.000 each |
+| both no-ad controls | PASS | PASS |
+
+That is the strongest argument for keeping it: it repairs a specific
+understood failure and is a no-op everywhere else. It is also the weakest
+part of the evidence, because **one episode is the entire case for this
+parameter**. Cross-validating `enter`/`stay`/`bridge` together gives held-out
+0.914 against 0.957 in-sample, and the whole gap is the single fold that
+holds out drink-champs: with it removed the training set has no reason to
+prefer any bridge, picks 0 on a tie, and then scores 0.709 on the held-out
+pair where 30s would have scored 0.969. Expect the bridge to help on shows
+that stack ads this way and to do nothing on shows that do not.
+
+### How much of this is overfitting
+
+`benchmark jev-cv` tunes on all but `--fold-size` episodes, scores those held
+out, and repeats until every episode has been held out once. It reads the
+cache, so it costs nothing.
+
+| what gets chosen per fold | in-sample | held-out | optimism |
+|---|---|---|---|
+| `enter` / `stay` only | 0.914 | 0.914 | **+0.000** |
+| `state` variant *and* thresholds | 0.920 | 0.831 | **+0.088** |
+
+The two results say opposite things and both matter.
+
+**Thresholds generalize.** Every one of the six folds independently selected
+`enter` 0.95 / `stay` 0.40 with two episodes removed. The optimum is not
+balanced on any particular episode, so tuning it costs nothing in honesty.
+
+**Variant selection does not.** Folds picked different winners (full+meta,
+basic, basic, full, full) and each pick scored *worse* on its own held-out
+pair than simply using one fixed configuration would have: -0.083. Choosing
+among the four variants on twelve episodes is fitting noise, which is what
+the 0.017 F1 run-to-run spread already implied.
+
+So the shipped configuration is fine to keep -- it wins on all four metrics
+at once and carries strictly more information -- but the *reason* to keep it
+is not that it measurably beats the alternatives, because it does not. Any
+future `state` change needs cross-validation, not a single full-corpus score,
+before it can claim an improvement.
+
+### What goes in `state`
+
+`--guidance full` carries MinusPod's whole rulebook (short brand taglines,
+platform pre/post-rolls, the produced-vs-organic distinction, the explicit
+not-an-ad list) rather than the one-paragraph summary. `--metadata` adds the
+podcast name, episode title, and synopsis. Both ride in `state`, which is sent
+once per request, so together they cost about 800 tokens per window against a
+per-segment question budget that dwarfs them.
+
+Each variant needs its own thresholds -- more guidance shifts the probability
+distribution, so scoring a new variant against the old `enter`/`stay` measures
+the mismatch rather than the variant:
+
+| variant | enter | stay | F1 | F0.5 | Precision | Recall |
+|---|---|---|---|---|---|---|
+| basic guidance, no metadata | 0.98 | 0.50 | 0.883 | 0.909 | 0.929 | 0.851 |
+| full guidance | 0.97 | 0.40 | 0.886 | 0.905 | 0.920 | 0.865 |
+| metadata only | 0.98 | 0.50 | 0.845 | 0.884 | 0.919 | 0.799 |
+| **full guidance + metadata** | **0.95** | **0.40** | **0.890** | **0.914** | **0.934** | **0.862** |
+
+Metadata on its own is the worst variant and only helps alongside the full
+rulebook. Cross-validation says that apparent interaction is noise: these
+four rows are not separable on twelve episodes, and picking the best-looking
+one costs 0.083 F0.5 on held-out data. Two runs of one identical
+configuration differed by 0.017 F1, which is the scale these gaps live at.
+
+**These thresholds were fitted on the same 12 episodes they are scored on, so
+0.909 is optimistic.** Treat it as "worth a real evaluation", not as a
+measured production number. Held-out episodes are the next step.
+
+`ENTER_THRESHOLD` / `STAY_THRESHOLD` dominate the result and were swept
+against the cache. The signal is strongly bimodal: 39% of segments come back
+at 0.02, the top bucket is 0.98, and Jev reports two decimals with a maximum
+of 0.99, so any threshold above 0.99 matches nothing. A run should open only
+on near-certainty and then extend generously across the weaker shoulders of
+the same break. Swept on the basic-guidance variant, which shows the shape
+most clearly (the shipped defaults are the full-guidance row above):
+
+| enter | stay | F1 | F0.5 | Precision | Recall |
+|---|---|---|---|---|---|
+| 0.60 | 0.40 | 0.731 | 0.667 | 0.632 | 0.903 |
+| 0.90 | 0.40 | 0.778 | 0.755 | 0.744 | 0.834 |
+| 0.95 | 0.40 | 0.827 | 0.829 | 0.834 | 0.834 |
+| 0.98 | 0.50 | 0.883 | 0.909 | 0.929 | 0.851 |
+| 0.99 | 0.50 | 0.697 | 0.774 | 0.843 | 0.610 |
+
+The no-ad controls only pass from `enter` 0.70 upward.
+
+Cost of one live pass over the whole corpus is **$0.022** at `$0.042` per
+million input tokens with output unbilled, so a 10-pass self-consistency
+sweep is about $0.22. `JSON compliance` and `Extraction methods` do not apply
+here: the response is typed, so there is no parsing step to fail.
+
+### Multi-pass (`--passes N`): tried, buys nothing
+
+`--passes N` takes N independent draws per window (distinct `uid`, so each is
+its own cache entry) and averages them, so a segment the passes disagree on
+lands mid-scale and falls below `enter` instead of opening a run on a coin
+flip. Self-consistency is the headline use for a model this cheap, so it
+looked like free accuracy.
+
+It is not. Re-tuning thresholds for each N (averaging compresses the
+distribution, so the single-pass thresholds do not transfer):
+
+| passes | enter | stay | F1 | F0.5 | Precision | Recall | cost |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.022 |
+| 2 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.044 |
+| 3 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.066 |
+| 5 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.111 |
+
+Identical, to three decimals, at five times the price. (Scored at the default
+thresholds instead, five passes *lose* 0.038 F0.5 -- that gap is threshold
+mismatch, not the passes.)
+
+The reason is that Jev is close to deterministic on this workload, more so
+than the published figures suggest:
+
+| | measured | docs |
+|---|---|---|
+| mean per-segment stdev across 5 passes | **0.0031** | 0.0102 |
+| mean spread (max - min) | 0.0080 | -- |
+| segments identical across all 5 passes | 59.5% | -- |
+| segments straddling the 0.95 decision boundary | **18 / 4228 (0.4%)** | -- |
+
+Eighteen contested segments corpus-wide, and none of them changes a span
+decision. There is nothing for averaging to repair. Repeat draws would only
+earn their cost on a model that actually wavers, or if the spread itself were
+used as a routing signal (hold the contested spans for review rather than
+averaging them away) -- and 0.4% is too thin a slice to be worth a stage.
+
+### Pass B (`--confirm`): tried, does not help
+
+Pass A opens a run only at `enter` 0.98, which is doing two jobs at once --
+"is this an ad" and "am I sure enough to cut". The obvious fix is to split
+them: generate candidates at a loose threshold, then confirm each assembled
+span with a second request (`CONFIRM_QUESTIONS`: `is_ad`,
+`promotional_language`, `produced_insert`, `guest_own_work`, `host_organic`),
+with `ConfirmPolicy` combining them in code.
+
+It does not work, in either arrangement:
+
+| Configuration | F1 | F0.5 | Precision | Recall |
+|---|---|---|---|---|
+| Pass A tuned, no confirmation | 0.883 | **0.909** | 0.929 | 0.851 |
+| Loose candidates (0.60) + best policy | 0.814 | 0.811 | 0.812 | 0.834 |
+| Tuned candidates (0.98) + any policy | 0.883 | 0.909 | 0.929 | 0.851 |
+
+On tuned candidates confirmation rejects **nothing**: no `min_is_ad` between
+0 and 0.7 changes a single span, and above that it only loses recall while
+precision stays pinned at 0.929. On loose candidates it does filter
+(precision 0.632 -> 0.812) but never recovers the ground given up.
+
+The reason is that the premise was wrong. Pass A's per-segment Nouls already
+receive the **whole window** as state -- every question sees every line, they
+just answer about their own -- so a segment was never being judged as an
+isolated fragment. Re-asking at span level gives the model no information it
+did not already have. The residual errors are genuine model disagreement, not
+question framing.
+
+`max_exclusion` is inert throughout: `guest_own_work` and `host_organic`
+essentially never fire on real candidates, so those two questions earn
+nothing on this corpus.
+
+The code is kept because the negative result is cheap to re-verify and the
+`ConfirmPolicy` shape is the right one if the signals ever become
+discriminating. Improving accuracy from here means attacking model judgment
+directly -- richer `guidance`, episode metadata in `state` -- not more stages.
+
 ## Adding a new model or episode
 
 - New model: append `[[models]]` to `benchmark.toml`. `benchmark run` will fill the gaps (existing models stay cached).
