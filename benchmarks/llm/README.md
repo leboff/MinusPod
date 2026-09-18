@@ -320,10 +320,43 @@ million input tokens with output unbilled, so a 10-pass self-consistency
 sweep is about $0.22. `JSON compliance` and `Extraction methods` do not apply
 here: the response is typed, so there is no parsing step to fail.
 
+### Multi-pass (`--passes N`): tried, buys nothing
+
 `--passes N` takes N independent draws per window (distinct `uid`, so each is
-its own cache entry) and averages them, which pushes segments the passes
-disagree on below the enter threshold instead of letting a coin flip open a
-run. Not yet evaluated.
+its own cache entry) and averages them, so a segment the passes disagree on
+lands mid-scale and falls below `enter` instead of opening a run on a coin
+flip. Self-consistency is the headline use for a model this cheap, so it
+looked like free accuracy.
+
+It is not. Re-tuning thresholds for each N (averaging compresses the
+distribution, so the single-pass thresholds do not transfer):
+
+| passes | enter | stay | F1 | F0.5 | Precision | Recall | cost |
+|---|---|---|---|---|---|---|---|
+| 1 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.022 |
+| 2 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.044 |
+| 3 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.066 |
+| 5 | 0.95 | 0.50 | 0.890 | 0.914 | 0.934 | 0.862 | $0.111 |
+
+Identical, to three decimals, at five times the price. (Scored at the default
+thresholds instead, five passes *lose* 0.038 F0.5 -- that gap is threshold
+mismatch, not the passes.)
+
+The reason is that Jev is close to deterministic on this workload, more so
+than the published figures suggest:
+
+| | measured | docs |
+|---|---|---|
+| mean per-segment stdev across 5 passes | **0.0031** | 0.0102 |
+| mean spread (max - min) | 0.0080 | -- |
+| segments identical across all 5 passes | 59.5% | -- |
+| segments straddling the 0.95 decision boundary | **18 / 4228 (0.4%)** | -- |
+
+Eighteen contested segments corpus-wide, and none of them changes a span
+decision. There is nothing for averaging to repair. Repeat draws would only
+earn their cost on a model that actually wavers, or if the spread itself were
+used as a routing signal (hold the contested spans for review rather than
+averaging them away) -- and 0.4% is too thin a slice to be worth a stage.
 
 ### Pass B (`--confirm`): tried, does not help
 

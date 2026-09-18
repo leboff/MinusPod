@@ -258,6 +258,12 @@ class TestAggregatePasses:
     def test_empty_is_not_an_error(self):
         assert jev.aggregate_passes([]).probabilities == {}
 
+    def test_identical_draws_average_to_themselves(self):
+        # Jev is near-deterministic here, so this is the common case: adding
+        # passes changes nothing and only multiplies the bill.
+        draw = jev.WindowResult({0: 0.97, 1: 0.03})
+        assert jev.aggregate_passes([draw] * 5).probabilities == draw.probabilities
+
 
 class TestPassSpread:
     def test_spread_is_max_minus_min(self):
