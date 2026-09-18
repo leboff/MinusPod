@@ -15,7 +15,7 @@ from dotenv import load_dotenv
 # regardless of where the user invokes `benchmark` from. Shell-exported vars still win.
 load_dotenv(dotenv_path=Path(__file__).resolve().parents[2] / ".env", override=False)
 
-from . import auth, capture as capture_mod, corpus as corpus_mod, migrate as migrate_mod, parsing, pricing, report as report_mod, runner as runner_mod
+from . import auth, capture as capture_mod, corpus as corpus_mod, jev, migrate as migrate_mod, parsing, pricing, report as report_mod, runner as runner_mod
 from .config import BenchmarkConfig, load as load_config
 from .runner import build_work_list, precompute_prompt_hashes
 from .storage import find_call, hash_prompt, read_response, scan_calls
@@ -449,6 +449,87 @@ def rotate_raw_cmd(
         shutil.move(str(src), str(dst))
         (_root() / "results" / "raw" / "responses").mkdir(parents=True, exist_ok=True)
     typer.echo(f"rotated {size_mb:.0f} MB to {dst}" + (" (original kept)" if keep else ""))
+
+
+@app.command("jev-spike")
+def jev_spike_cmd(
+    oracle: str = typer.Option(
+        "overlap", "--oracle",
+        help="Score a perfect judge instead of calling the API: "
+             "'overlap', 'majority', or 'off' for live calls."),
+    enter: float = typer.Option(jev.ENTER_THRESHOLD, "--enter"),
+    stay: float = typer.Option(jev.STAY_THRESHOLD, "--stay"),
+    corpus_dir: Optional[Path] = typer.Option(None, "--corpus-dir"),
+) -> None:
+    """Pass-A spike: per-segment ad-ness judgments scored against the corpus.
+
+    With --oracle this calls nothing and costs nothing: it substitutes the
+    probabilities a perfect per-segment judge would return, which measures
+    the ceiling this decomposition can reach given segment granularity.
+    """
+    _setup_logging()
+    root = corpus_dir or (_root() / "data" / "corpus")
+    ep_ids = corpus_mod.list_episodes(root)
+    if not ep_ids:
+        typer.echo(f"no corpus episodes under {root}", err=True)
+        raise typer.Exit(1)
+
+    api_key = None
+    if oracle == "off":
+        api_key = jev.api_key_from_env()
+        if not api_key:
+            typer.echo("TYPESAFE_API_KEY is not set; use --oracle to run offline.", err=True)
+            raise typer.Exit(1)
+
+    scores: list[jev.EpisodeScore] = []
+    est_tokens = 0
+    for ep_id in ep_ids:
+        episode = corpus_mod.load_episode(root / ep_id)
+        windows = jev.episode_windows(episode)
+        est_tokens += jev.estimate_input_tokens(windows)
+
+        if oracle == "off":
+            def source(segs, _key=api_key):
+                return jev.call_window(segs, api_key=_key)
+        else:
+            def source(segs, _policy=oracle, _ep=episode):
+                return jev.WindowResult(
+                    probabilities=jev.oracle_probabilities(
+                        segs, _ep.truth.ads, policy=_policy))
+
+        scores.append(jev.score_episode(
+            episode, windows, source, enter=enter, stay=stay))
+
+    _echo_jev_table(scores, est_tokens=est_tokens, oracle=oracle)
+
+
+def _echo_jev_table(scores, *, est_tokens: int, oracle: str) -> None:
+    ad_eps = [s for s in scores if not s.is_no_ad]
+    typer.echo(f"\nmode: {'oracle=' + oracle if oracle != 'off' else 'live jev'}   "
+               f"episodes: {len(scores)}")
+    typer.echo(f"{'episode':38}{'F1':>7}{'F0.5':>7}{'prec':>7}{'rec':>7}"
+               f"{'startMAE':>10}{'endMAE':>9}")
+    for s in sorted(ad_eps, key=lambda s: s.f1):
+        smae = f"{s.start_mae:.1f}" if s.start_mae is not None else "-"
+        emae = f"{s.end_mae:.1f}" if s.end_mae is not None else "-"
+        typer.echo(f"{s.ep_id[:38]:38}{s.f1:7.3f}{s.f05:7.3f}"
+                   f"{s.precision:7.3f}{s.recall:7.3f}{smae:>10}{emae:>9}")
+
+    if ad_eps:
+        mean = lambda xs: sum(xs) / len(xs)
+        typer.echo(f"\n{'MEAN':38}{mean([s.f1 for s in ad_eps]):7.3f}"
+                   f"{mean([s.f05 for s in ad_eps]):7.3f}"
+                   f"{mean([s.precision for s in ad_eps]):7.3f}"
+                   f"{mean([s.recall for s in ad_eps]):7.3f}")
+
+    for s in scores:
+        if s.is_no_ad:
+            verdict = "PASS" if s.no_ad_passed else f"FAIL ({s.no_ad_fps} FP)"
+            typer.echo(f"no-ad control {s.ep_id[:30]:32} {verdict}")
+
+    cost = est_tokens * jev.INPUT_COST_PER_MTOK / 1e6
+    typer.echo(f"\nestimated input tokens/pass (all episodes): {est_tokens:,}")
+    typer.echo(f"estimated cost/pass (all episodes): ${cost:.4f}")
 
 
 def _preview(cfg, episodes, *, paths, system_prompt, include_errored=False, addressing_mode="timestamps"):

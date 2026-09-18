@@ -178,6 +178,49 @@ approximate boundaries.
 `benchmark show-prompt` reconstructs a call's prompt using the mode stored on
 that call's record, so it works unmodified for either mode.
 
+## TypeSafe Jev spike (Pass A)
+
+An experimental second detection shape, scored by the same metrics as the
+chat-model rows so the numbers are directly comparable.
+
+Instead of one call per window returning a JSON array of ad spans, it sends
+the window transcript as state and asks **one Noul per segment** ("line L0042
+is advertising, not editorial content"). The reply is a probability per
+segment; `spans_from_probabilities` recovers ad spans by taking contiguous
+runs. Because a run is delimited by segment edges, no timestamp is ever
+generated, and boundaries cannot land off-grid.
+
+```sh
+benchmark jev-spike --oracle overlap    # offline, no API key, no cost
+benchmark jev-spike --oracle off        # live, needs TYPESAFE_API_KEY
+```
+
+`--oracle` substitutes the probabilities a *perfect* per-segment judge would
+return, derived from `truth.txt`. That measures the ceiling of the
+decomposition itself, separating "can this shape work" from "is the model
+good enough". Run it before spending anything on a live sweep.
+
+Current ceiling over the 14-episode corpus: **F1 0.991, F0.5 0.996,
+precision 1.000, recall 0.983**, both no-ad controls PASS. For reference the
+best live chat model in `results/report.md` is `claude-haiku-4-5` at F1 0.920
+/ F0.5 0.908, so segment granularity is not the limiting factor.
+
+The single miss is `ep-tosh-show`, where two distinct ad breaks sit 27.7s
+apart with no speech between them. Nothing in the transcript separates them,
+so they merge into one span. `MAX_RUN_GAP_SECONDS` (30s) is the knob: swept
+against the oracle, precision reaches 1.000 at 30s and is flat from there to
+unbounded, because speech between two breaks produces its own low-scoring
+segments and ends the run without help. Only a pure-silence gap can bridge
+two breaks. Lowering it to 15s recovers that one ad but over-splits real
+breaks that contain internal silence, costing more precision than it buys
+recall (mean F0.5 0.925 vs 0.996).
+
+Estimated cost of one live pass over the whole corpus is **$0.022** at
+`$0.042` per million input tokens with output unbilled, so a 10-pass
+self-consistency sweep is about $0.22. `JSON compliance` and
+`Extraction methods` do not apply here: the response is typed, so there is no
+parsing step to fail.
+
 ## Adding a new model or episode
 
 - New model: append `[[models]]` to `benchmark.toml`. `benchmark run` will fill the gaps (existing models stay cached).
