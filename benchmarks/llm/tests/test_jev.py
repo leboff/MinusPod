@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from types import SimpleNamespace
 
 from benchmark import jev
 from benchmark.truth_parser import Ad
@@ -135,6 +136,25 @@ class TestPayload:
     def test_no_uid_key_when_not_requested(self):
         assert "uid" not in jev.build_payload(contiguous(2))["state"]
 
+    def test_metadata_lands_in_state(self):
+        meta = SimpleNamespace(
+            podcast_name="Crime Junkie", title="MISSING: Cole",
+            description="A man vanishes in rural North Carolina.")
+        state = jev.build_payload(contiguous(2), metadata=meta)["state"]
+        assert state["podcast"] == "Crime Junkie"
+        assert state["episode_title"] == "MISSING: Cole"
+        assert "North Carolina" in state["episode_description"]
+
+    def test_empty_description_is_omitted(self):
+        meta = SimpleNamespace(podcast_name="S", title="T", description="")
+        state = jev.build_payload(contiguous(2), metadata=meta)["state"]
+        assert "episode_description" not in state
+
+    def test_full_guidance_restores_the_dropped_rules(self):
+        assert len(jev.GUIDANCE_FULL) > len(jev.GUIDANCE)
+        for rule in ("tagline", "Acast", "dead air", "Patreon"):
+            assert rule in jev.GUIDANCE_FULL
+
 
 class TestConfirmPolicy:
     def test_accepts_a_clear_ad(self):
@@ -267,11 +287,19 @@ class TestProbabilityCache:
         with pytest.raises(KeyError):
             cache.get_or_call(contiguous(2), api_key=None)
 
-    def test_changing_a_question_invalidates_the_key(self, tmp_path, monkeypatch):
+    def test_changing_the_guidance_invalidates_the_key(self):
         segs = contiguous(2)
-        before = jev.payload_key(segs)
-        monkeypatch.setattr(jev, "GUIDANCE", "different definition")
-        assert jev.payload_key(segs) != before
+        a = jev.hash_payload(jev.build_payload(segs, guidance="one rule"))
+        b = jev.hash_payload(jev.build_payload(segs, guidance="another rule"))
+        assert a != b
+
+    def test_adding_metadata_invalidates_the_key(self):
+        segs = contiguous(2)
+        meta = SimpleNamespace(
+            podcast_name="Show", title="Ep 1", description="About a thing.")
+        bare = jev.hash_payload(jev.build_payload(segs))
+        rich = jev.hash_payload(jev.build_payload(segs, metadata=meta))
+        assert bare != rich
 
     def test_distinct_uids_are_distinct_draws(self):
         segs = contiguous(2)

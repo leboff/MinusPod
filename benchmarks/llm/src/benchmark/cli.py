@@ -466,6 +466,12 @@ def jev_spike_cmd(
         False, "--confirm",
         help="Pass B: treat Pass A as a recall-first candidate generator and "
              "confirm each span with a second span-level request."),
+    guidance: str = typer.Option(
+        "full", "--guidance",
+        help="'basic' (one paragraph) or 'full' (MinusPod's whole rulebook)."),
+    metadata: bool = typer.Option(
+        True, "--metadata/--no-metadata",
+        help="Include podcast name, episode title, and synopsis in state."),
     corpus_dir: Optional[Path] = typer.Option(None, "--corpus-dir"),
 ) -> None:
     """Pass-A spike: per-segment ad-ness judgments scored against the corpus.
@@ -481,6 +487,12 @@ def jev_spike_cmd(
         typer.echo(f"no corpus episodes under {root}", err=True)
         raise typer.Exit(1)
 
+    if guidance not in ("basic", "full"):
+        typer.echo("--guidance must be 'basic' or 'full'", err=True)
+        raise typer.Exit(2)
+    guidance_text = jev.GUIDANCE if guidance == "basic" else jev.GUIDANCE_FULL
+    episode_metadata = (lambda ep: ep.metadata) if metadata else (lambda ep: None)
+
     cache = None
     api_key = None
     if oracle == "off":
@@ -495,10 +507,11 @@ def jev_spike_cmd(
         est_tokens += jev.estimate_input_tokens(windows)
 
         if oracle == "off":
-            def source(segs, _cache=cache, _key=api_key, _n=passes):
+            def source(segs, _cache=cache, _key=api_key, _n=passes,
+                       _g=guidance_text, _m=episode_metadata(episode)):
                 return jev.aggregate_passes([
                     _cache.get_or_call(
-                        segs, api_key=_key,
+                        segs, api_key=_key, guidance=_g, metadata=_m,
                         uid=None if _n == 1 else f"pass-{i}")
                     for i in range(_n)
                 ])
@@ -536,13 +549,15 @@ def jev_spike_cmd(
         typer.echo(f"cache: {cache.hits} hit, {cache.misses} fetched "
                    f"-> {cache.path.relative_to(_root())}")
 
-    _echo_jev_table(scores, est_tokens=est_tokens, oracle=oracle)
+    _echo_jev_table(scores, est_tokens=est_tokens, oracle=oracle,
+                    variant=f"guidance={guidance} metadata={metadata}")
 
 
-def _echo_jev_table(scores, *, est_tokens: int, oracle: str) -> None:
+def _echo_jev_table(scores, *, est_tokens: int, oracle: str,
+                    variant: str = "") -> None:
     ad_eps = [s for s in scores if not s.is_no_ad]
     typer.echo(f"\nmode: {'oracle=' + oracle if oracle != 'off' else 'live jev'}   "
-               f"episodes: {len(scores)}")
+               f"episodes: {len(scores)}   {variant}")
     typer.echo(f"{'episode':38}{'F1':>7}{'F0.5':>7}{'prec':>7}{'rec':>7}"
                f"{'startMAE':>10}{'endMAE':>9}")
     for s in sorted(ad_eps, key=lambda s: s.f1):

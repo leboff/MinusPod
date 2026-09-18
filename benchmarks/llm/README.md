@@ -224,16 +224,43 @@ recall (mean F0.5 0.925 vs 0.996).
 
 ### Live results
 
-One pass over the corpus at the tuned thresholds:
+One pass over the corpus at the tuned defaults (`--guidance full --metadata`):
 
 | | F1 | F0.5 | Precision | Recall | No-ad controls |
 |---|---|---|---|---|---|
-| Jev (`jev-latest`) | 0.883 | **0.909** | 0.929 | 0.851 | PASS / PASS |
+| Jev (`jev-latest`) | 0.890 | **0.914** | 0.934 | 0.862 | PASS / PASS |
 | `claude-haiku-4-5` | 0.920 | 0.908 | 0.900 | 0.946 | PASS |
 
-Level on F0.5, which is the ranking metric here, and ahead on precision, at
-roughly 1% of the cost. Behind on recall, so it leaves more ads in while
-cutting less real content.
+Ahead on F0.5, which is the ranking metric here, and on precision, at roughly
+1% of the cost. Behind on recall, so it leaves more ads in while cutting less
+real content. Eight of the twelve ad-bearing episodes score 1.000.
+
+### What goes in `state`
+
+`--guidance full` carries MinusPod's whole rulebook (short brand taglines,
+platform pre/post-rolls, the produced-vs-organic distinction, the explicit
+not-an-ad list) rather than the one-paragraph summary. `--metadata` adds the
+podcast name, episode title, and synopsis. Both ride in `state`, which is sent
+once per request, so together they cost about 800 tokens per window against a
+per-segment question budget that dwarfs them.
+
+Each variant needs its own thresholds -- more guidance shifts the probability
+distribution, so scoring a new variant against the old `enter`/`stay` measures
+the mismatch rather than the variant:
+
+| variant | enter | stay | F1 | F0.5 | Precision | Recall |
+|---|---|---|---|---|---|---|
+| basic guidance, no metadata | 0.98 | 0.50 | 0.883 | 0.909 | 0.929 | 0.851 |
+| full guidance | 0.97 | 0.40 | 0.886 | 0.905 | 0.920 | 0.865 |
+| metadata only | 0.98 | 0.50 | 0.845 | 0.884 | 0.919 | 0.799 |
+| **full guidance + metadata** | **0.95** | **0.40** | **0.890** | **0.914** | **0.934** | **0.862** |
+
+Metadata on its own is the worst variant and only helps alongside the full
+rulebook, which is either a real interaction or an artifact of a 12-episode
+corpus. **Treat the 0.005 F0.5 gap between the top and bottom rows as noise**:
+two runs of one identical configuration differed by 0.017 F1. The reason to
+prefer the last row is that it wins on all four metrics at once and carries
+strictly more information, not that the corpus can separate it.
 
 **These thresholds were fitted on the same 12 episodes they are scored on, so
 0.909 is optimistic.** Treat it as "worth a real evaluation", not as a
@@ -244,14 +271,15 @@ against the cache. The signal is strongly bimodal: 39% of segments come back
 at 0.02, the top bucket is 0.98, and Jev reports two decimals with a maximum
 of 0.99, so any threshold above 0.99 matches nothing. A run should open only
 on near-certainty and then extend generously across the weaker shoulders of
-the same break:
+the same break. Swept on the basic-guidance variant, which shows the shape
+most clearly (the shipped defaults are the full-guidance row above):
 
 | enter | stay | F1 | F0.5 | Precision | Recall |
 |---|---|---|---|---|---|
 | 0.60 | 0.40 | 0.731 | 0.667 | 0.632 | 0.903 |
 | 0.90 | 0.40 | 0.778 | 0.755 | 0.744 | 0.834 |
 | 0.95 | 0.40 | 0.827 | 0.829 | 0.834 | 0.834 |
-| **0.98** | **0.50** | **0.883** | **0.909** | **0.929** | **0.851** |
+| 0.98 | 0.50 | 0.883 | 0.909 | 0.929 | 0.851 |
 | 0.99 | 0.50 | 0.697 | 0.774 | 0.843 | 0.610 |
 
 The no-ad controls only pass from `enter` 0.70 upward.

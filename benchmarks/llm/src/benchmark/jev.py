@@ -39,8 +39,8 @@ INPUT_COST_PER_MTOK = 0.042
 # shoulders of the same break. Loosening `enter` to 0.6 costs 27 points of
 # precision (0.929 -> 0.632) for 5 points of recall. Jev reports two decimal
 # places and tops out at 0.99, so anything above 0.99 matches nothing at all.
-ENTER_THRESHOLD = 0.98
-STAY_THRESHOLD = 0.50
+ENTER_THRESHOLD = 0.95
+STAY_THRESHOLD = 0.40
 
 # A run breaks across a silence gap wider than this. Swept against the oracle
 # over the corpus: precision climbs to 1.000 at 30s and is flat from there to
@@ -71,6 +71,40 @@ GUIDANCE = (
     "during conversation, are editorial content, not advertising."
 )
 
+# The rules GUIDANCE compresses away, restored from MinusPod's own
+# DEFAULT_SYSTEM_PROMPT. State is sent once per request, so the whole rulebook
+# costs about as much as twenty of the per-segment questions.
+GUIDANCE_FULL = GUIDANCE + (
+    "\n\nADVERTISING ALSO INCLUDES:\n"
+    "- Short brand tagline spots, roughly 15 to 45 seconds, that carry no "
+    "promo code and no URL. They use concentrated marketing copy (\"bringing "
+    "you the latest\", \"where innovation lands first\", \"level up your "
+    "game\"), are usually voiced by someone other than the host, and feel "
+    "tonally separate from the surrounding conversation. A typical shape is "
+    "brand name, tagline, product category pitch, brand name again. These are "
+    "advertising even though they lack the usual markers.\n"
+    "- Hosting-platform insertions such as \"Acast powers the world's best "
+    "podcasts\", \"Hosted on Acast\", \"Spotify for Podcasters\", or "
+    "\"iHeartRadio\". These usually bookend the episode.\n"
+    "- Produced segments promoting a different show, whether inserted by the "
+    "network or the platform, even with no promo code.\n"
+    "- Network promos: short produced spots advertising other shows.\n"
+    "\nTHE DECIDING DISTINCTION:\n"
+    "If the HOST says \"check out my other show\" mid-conversation, that is "
+    "editorial content. If a PRODUCED SEGMENT, in a different voice or a "
+    "different acoustic, promotes another show or the platform itself, that "
+    "is advertising.\n"
+    "\nNOT ADVERTISING:\n"
+    "- Silence, pauses, or dead air. These are ordinary production gaps.\n"
+    "- Topic transitions where the host simply changes subject.\n"
+    "- A guest discussing their own work, book, or project in the course of "
+    "the interview.\n"
+    "- The host mentioning their own other shows, social media, or Patreon as "
+    "part of conversation.\n"
+    "- Brand names that come up in passing during genuine discussion. A line "
+    "must carry promotional intent, not merely name a company."
+)
+
 NOUL_INSTRUCTIONS = "Line {lid} of `transcript` is advertising, not editorial content."
 
 
@@ -98,16 +132,25 @@ def build_questions(segments: Sequence[dict]) -> dict[str, dict]:
 
 
 def build_payload(segments: Sequence[dict], *, model: str = DEFAULT_MODEL,
-                  uid: str | None = None) -> dict:
+                  uid: str | None = None, guidance: str = GUIDANCE,
+                  metadata: object = None) -> dict:
     """One request covering a whole window.
 
     ``uid`` makes an otherwise identical repeat a distinct draw, which is what
     multi-pass self-consistency needs.
+
+    ``metadata`` supplies the show and episode the transcript came from. The
+    synopsis says what the episode is *about*, which is the other half of the
+    judgment: a mattress pitch inside an episode about a missing person is
+    obviously not the subject matter.
     """
-    state: dict[str, object] = {
-        "guidance": GUIDANCE,
-        "transcript": build_state(segments),
-    }
+    state: dict[str, object] = {"guidance": guidance}
+    if metadata is not None:
+        state["podcast"] = metadata.podcast_name
+        state["episode_title"] = metadata.title
+        if metadata.description:
+            state["episode_description"] = metadata.description
+    state["transcript"] = build_state(segments)
     if uid is not None:
         state["uid"] = uid
     return {
@@ -218,10 +261,13 @@ class ProbabilityCache:
         return entry
 
     def get_or_call(self, segments: Sequence[dict], *, api_key: str | None,
-                    model: str = DEFAULT_MODEL,
-                    uid: str | None = None) -> WindowResult:
+                    model: str = DEFAULT_MODEL, uid: str | None = None,
+                    guidance: str = GUIDANCE,
+                    metadata: object = None) -> WindowResult:
         entry = self.nouls(
-            build_payload(segments, model=model, uid=uid), api_key=api_key)
+            build_payload(segments, model=model, uid=uid,
+                          guidance=guidance, metadata=metadata),
+            api_key=api_key)
         return WindowResult(
             probabilities={
                 int(k[1:]) if k.startswith("s") else int(k): v
