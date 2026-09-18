@@ -88,6 +88,41 @@ class TestSpansFromProbabilities:
         (ad,) = spans(segs, probs)
         assert (ad["start"], ad["end"]) == (10.0, 30.0)
 
+    def test_bridges_a_low_scoring_speech_dip(self):
+        # A cross-promo playing a clip of the show it advertises: the clip
+        # reads as conversation and scores low, mid-break.
+        segs = contiguous(5, length=20.0)
+        probs = {0: 0.98, 1: 0.98, 2: 0.05, 3: 0.98, 4: 0.98}
+        (ad,) = spans(segs, probs, enter=0.95, bridge=30.0)
+        assert (ad["start"], ad["end"]) == (0.0, 100.0)
+
+    def test_does_not_bridge_empty_silence(self):
+        # No segment in the gap means silence, which is what separates two
+        # breaks. Bridging it would undo the split.
+        segs = [seg(0, 0.0, 30.0), seg(1, 55.0, 85.0)]
+        probs = {0: 0.98, 1: 0.98}
+        recovered = spans(segs, probs, enter=0.95, bridge=60.0, max_gap=10.0)
+        assert len(recovered) == 2
+
+    def test_dip_longer_than_the_bridge_still_splits(self):
+        segs = contiguous(5, length=20.0)
+        probs = {0: 0.98, 1: 0.98, 2: 0.05, 3: 0.98, 4: 0.98}
+        recovered = spans(segs, probs, enter=0.95, bridge=10.0)
+        assert len(recovered) == 2
+
+    def test_bridge_off_by_default_in_helper(self):
+        segs = contiguous(5, length=20.0)
+        probs = {0: 0.98, 1: 0.98, 2: 0.05, 3: 0.98, 4: 0.98}
+        assert len(spans(segs, probs, enter=0.95, bridge=0.0)) == 2
+
+    def test_bridge_needs_a_confident_run_on_both_sides(self):
+        # The trailing segments never reach enter, so there is no second run
+        # to join and the bridge has nothing to do.
+        segs = contiguous(4, length=20.0)
+        probs = {0: 0.98, 1: 0.05, 2: 0.50, 3: 0.50}
+        (ad,) = spans(segs, probs, enter=0.95, bridge=30.0)
+        assert ad["end"] == 20.0
+
     def test_stay_above_enter_is_rejected(self):
         with pytest.raises(ValueError):
             jev.spans_from_probabilities(contiguous(2), {}, enter=0.4, stay=0.8)

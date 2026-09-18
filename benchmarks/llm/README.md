@@ -228,15 +228,52 @@ One pass over the corpus at the tuned defaults (`--guidance full --metadata`):
 
 | | F1 | F0.5 | Precision | Recall | No-ad controls |
 |---|---|---|---|---|---|
-| Jev (`jev-latest`) | 0.890 | 0.914 | 0.934 | 0.862 | PASS / PASS |
+| Jev (`jev-latest`) | 0.929 | 0.957 | 0.979 | 0.893 | PASS / PASS |
 | `claude-haiku-4-5` | 0.920 | 0.908 | 0.900 | 0.946 | PASS |
 
-**Do not read that as Jev beating Haiku.** Cross-validation (below) puts the
-honest figure near **0.88**, and the four `state` variants are
-indistinguishable on a corpus this size. The defensible claim is that Jev is
-*competitive with* Haiku at roughly 1% of the cost, with the precision/recall
-balance tilted the way MinusPod wants -- it leaves more ads in rather than
-cutting real content. Eight of the twelve ad-bearing episodes score 1.000.
+**Do not read that as Jev beating Haiku.** Those numbers come from the same
+twelve episodes every parameter was chosen on. Cross-validation (below) is
+the honest view, and the four `state` variants are not separable at this
+corpus size. The defensible claim is that Jev is *competitive with* Haiku at
+roughly 1% of the cost, with the precision/recall balance tilted the way
+MinusPod wants -- it leaves more ads in rather than cutting real content.
+Nine of the twelve ad-bearing episodes score 1.000 and none is below 0.75.
+
+### Stacked ads and the bridge
+
+`ep-drink-champs` was the one bad episode (F0.5 0.481) and every error in it
+came from a single mechanism. It carries the same ad stack three times
+(Airtasker, then a cross-promo for *Decisions Decisions*, then a Kiki Palmer
+episode plug, then OnDeck, then Public), and that cross-promo **plays a clip
+of the show it is advertising**. The clip is two people chatting, so Jev
+scores it 0.05-0.27 -- correctly, line by line -- and the run severs in the
+middle of the break. One truth break became two half-spans, each failing IoU
+0.5: three breaks lost that way produced 3 FN and 6 FP, which was the entire
+error budget for the episode.
+
+`BRIDGE_SECONDS` lets a run cross that much low-scoring **speech** to rejoin.
+An empty gap is never bridged: no segment in the gap means silence, and
+silence between two breaks is exactly what separates them (see
+`ep-tosh-show`, where two breaks sit 27.7s apart with nothing between).
+
+The sweep is flat below 25s and flat again from 28s to 60s+, and at 30s it
+moves exactly one episode:
+
+| episode | bridge 0 | bridge 30 |
+|---|---|---|
+| drink-champs | 0.481 | **1.000** |
+| the other eleven | -- | unchanged, +0.000 each |
+| both no-ad controls | PASS | PASS |
+
+That is the strongest argument for keeping it: it repairs a specific
+understood failure and is a no-op everywhere else. It is also the weakest
+part of the evidence, because **one episode is the entire case for this
+parameter**. Cross-validating `enter`/`stay`/`bridge` together gives held-out
+0.914 against 0.957 in-sample, and the whole gap is the single fold that
+holds out drink-champs: with it removed the training set has no reason to
+prefer any bridge, picks 0 on a tie, and then scores 0.709 on the held-out
+pair where 30s would have scored 0.969. Expect the bridge to help on shows
+that stack ads this way and to do nothing on shows that do not.
 
 ### How much of this is overfitting
 

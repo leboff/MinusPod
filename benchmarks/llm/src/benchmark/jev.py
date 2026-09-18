@@ -49,6 +49,15 @@ STAY_THRESHOLD = 0.40
 # two breaks, so this is the smallest value that costs nothing.
 MAX_RUN_GAP_SECONDS = 30.0
 
+# Ads stack, and a cross-promo often plays a clip of the show it is
+# advertising. That clip reads as conversation, scores low, and severs the
+# run mid-break. A run may cross this much low-scoring speech to rejoin.
+# Swept 0-60s: flat below 25, flat from 28 upward, and it moves exactly one
+# corpus episode (drink-champs, F0.5 0.481 -> 1.000) while leaving the other
+# eleven and both no-ad controls untouched. Only speech bridges; an empty
+# gap is silence, and silence is what separates two breaks.
+BRIDGE_SECONDS = 30.0
+
 
 def line_id(sid: int) -> str:
     return f"L{sid:04d}"
@@ -291,6 +300,7 @@ def spans_from_probabilities(
     enter: float = ENTER_THRESHOLD,
     stay: float = STAY_THRESHOLD,
     max_gap: float = MAX_RUN_GAP_SECONDS,
+    bridge: float = BRIDGE_SECONDS,
 ) -> list[dict]:
     """Contiguous runs of ad-ish segments, as ad dicts.
 
@@ -310,6 +320,7 @@ def spans_from_probabilities(
     opens = [probabilities.get(s["sid"], 0.0) >= enter for s in ordered]
 
     ads: list[dict] = []
+    runs: list[tuple[int, int]] = []
     i = 0
     while i < len(ordered):
         if not above_stay[i]:
@@ -322,17 +333,46 @@ def spans_from_probabilities(
         # A run of merely-above-stay segments with no confident member is not
         # an ad; it is the tail of an ordinary conversation.
         if any(opens[k] for k in range(i, j + 1)):
-            members = ordered[i:j + 1]
-            ads.append({
-                "start": members[0]["start"],
-                "end": members[-1]["end"],
-                "confidence": max(
-                    probabilities.get(m["sid"], 0.0) for m in members),
-                "start_id": members[0]["sid"],
-                "end_id": members[-1]["sid"],
-            })
+            runs.append((i, j))
         i = j + 1
+
+    for lo, hi in _bridged(runs, ordered, bridge):
+        members = ordered[lo:hi + 1]
+        ads.append({
+            "start": members[0]["start"],
+            "end": members[-1]["end"],
+            "confidence": max(
+                probabilities.get(m["sid"], 0.0) for m in members),
+            "start_id": members[0]["sid"],
+            "end_id": members[-1]["sid"],
+        })
     return ads
+
+
+def _bridged(runs: list[tuple[int, int]], ordered: Sequence[dict],
+             bridge: float) -> list[tuple[int, int]]:
+    """Join runs separated by a short stretch of low-scoring speech.
+
+    Ads stack: a cross-promo often plays a clip of the show it advertises,
+    and that clip reads as conversation, so one segment mid-break scores low
+    and severs the run. Rejoining across it recovers the whole break.
+
+    The gap must contain at least one segment. An empty gap is silence, and
+    silence between two breaks is what separates them -- bridging that would
+    undo the split this relies on.
+    """
+    if not runs:
+        return []
+    out = [runs[0]]
+    for lo, hi in runs[1:]:
+        prev_lo, prev_hi = out[-1]
+        between = ordered[prev_hi + 1:lo]
+        spanned = sum(s["end"] - s["start"] for s in between)
+        if between and spanned <= bridge:
+            out[-1] = (prev_lo, hi)
+        else:
+            out.append((lo, hi))
+    return out
 
 
 # --- oracle --------------------------------------------------------------
