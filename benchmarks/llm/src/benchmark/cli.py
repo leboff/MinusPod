@@ -553,6 +553,65 @@ def jev_spike_cmd(
                     variant=f"guidance={guidance} metadata={metadata}")
 
 
+@app.command("jev-cv")
+def jev_cv_cmd(
+    fold_size: int = typer.Option(2, "--fold-size"),
+    guidance: str = typer.Option("full", "--guidance"),
+    metadata: bool = typer.Option(True, "--metadata/--no-metadata"),
+    corpus_dir: Optional[Path] = typer.Option(None, "--corpus-dir"),
+) -> None:
+    """Cross-validate the thresholds: how much of the score is overfitting?
+
+    Tunes enter/stay on all but `--fold-size` episodes, scores those held out,
+    and repeats until every episode has been held out once. Reads the cache,
+    so it costs nothing.
+    """
+    _setup_logging()
+    root = corpus_dir or (_root() / "data" / "corpus")
+    cache = jev.ProbabilityCache(_root() / "results" / "raw" / "jev_cache.json")
+    guidance_text = jev.GUIDANCE if guidance == "basic" else jev.GUIDANCE_FULL
+
+    episodes, windows = {}, {}
+    for ep_id in corpus_mod.list_episodes(root):
+        ep = corpus_mod.load_episode(root / ep_id)
+        episodes[ep_id] = ep
+        windows[ep_id] = jev.episode_windows(ep)
+
+    def score_fn(ep_id, enter, stay):
+        ep = episodes[ep_id]
+        meta = ep.metadata if metadata else None
+        return jev.score_episode(
+            ep, windows[ep_id],
+            lambda s: cache.get_or_call(
+                s, api_key=None, guidance=guidance_text, metadata=meta),
+            enter=enter, stay=stay)
+
+    ad_ids = [e for e in episodes if not episodes[e].truth.is_no_ad_episode]
+    try:
+        folds = jev.cross_validate(ad_ids, score_fn, fold_size=fold_size)
+    except KeyError as e:
+        typer.echo(f"{e}\nRun `benchmark jev-spike --oracle off` first.", err=True)
+        raise typer.Exit(1) from e
+
+    typer.echo(f"\n{len(folds)} folds of {fold_size}, guidance={guidance} "
+               f"metadata={metadata}")
+    typer.echo(f"{'held out':44}{'enter':>6}{'stay':>6}{'train':>8}"
+               f"{'test':>8}{'fixed':>8}")
+    for f in folds:
+        held = ", ".join(h.replace("ep-", "")[:18] for h in f.held_out)
+        typer.echo(f"{held[:44]:44}{f.enter:6.2f}{f.stay:6.2f}"
+                   f"{f.train_f05:8.3f}{f.test_f05:8.3f}{f.fixed_f05:8.3f}")
+
+    n = len(folds)
+    mean = lambda k: sum(getattr(f, k) for f in folds) / n  # noqa: E731
+    typer.echo(f"\n{'MEAN':44}{'':12}{mean('train_f05'):8.3f}"
+               f"{mean('test_f05'):8.3f}{mean('fixed_f05'):8.3f}")
+    typer.echo(f"\nin-sample minus held-out: {mean('train_f05') - mean('test_f05'):+.3f}"
+               "   (the optimism in a tuned-on-everything number)")
+    typer.echo(f"per-fold tuning vs shipped defaults on the same episodes: "
+               f"{mean('test_f05') - mean('fixed_f05'):+.3f}")
+
+
 def _echo_jev_table(scores, *, est_tokens: int, oracle: str,
                     variant: str = "") -> None:
     ad_eps = [s for s in scores if not s.is_no_ad]

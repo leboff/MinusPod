@@ -228,12 +228,44 @@ One pass over the corpus at the tuned defaults (`--guidance full --metadata`):
 
 | | F1 | F0.5 | Precision | Recall | No-ad controls |
 |---|---|---|---|---|---|
-| Jev (`jev-latest`) | 0.890 | **0.914** | 0.934 | 0.862 | PASS / PASS |
+| Jev (`jev-latest`) | 0.890 | 0.914 | 0.934 | 0.862 | PASS / PASS |
 | `claude-haiku-4-5` | 0.920 | 0.908 | 0.900 | 0.946 | PASS |
 
-Ahead on F0.5, which is the ranking metric here, and on precision, at roughly
-1% of the cost. Behind on recall, so it leaves more ads in while cutting less
-real content. Eight of the twelve ad-bearing episodes score 1.000.
+**Do not read that as Jev beating Haiku.** Cross-validation (below) puts the
+honest figure near **0.88**, and the four `state` variants are
+indistinguishable on a corpus this size. The defensible claim is that Jev is
+*competitive with* Haiku at roughly 1% of the cost, with the precision/recall
+balance tilted the way MinusPod wants -- it leaves more ads in rather than
+cutting real content. Eight of the twelve ad-bearing episodes score 1.000.
+
+### How much of this is overfitting
+
+`benchmark jev-cv` tunes on all but `--fold-size` episodes, scores those held
+out, and repeats until every episode has been held out once. It reads the
+cache, so it costs nothing.
+
+| what gets chosen per fold | in-sample | held-out | optimism |
+|---|---|---|---|
+| `enter` / `stay` only | 0.914 | 0.914 | **+0.000** |
+| `state` variant *and* thresholds | 0.920 | 0.831 | **+0.088** |
+
+The two results say opposite things and both matter.
+
+**Thresholds generalize.** Every one of the six folds independently selected
+`enter` 0.95 / `stay` 0.40 with two episodes removed. The optimum is not
+balanced on any particular episode, so tuning it costs nothing in honesty.
+
+**Variant selection does not.** Folds picked different winners (full+meta,
+basic, basic, full, full) and each pick scored *worse* on its own held-out
+pair than simply using one fixed configuration would have: -0.083. Choosing
+among the four variants on twelve episodes is fitting noise, which is what
+the 0.017 F1 run-to-run spread already implied.
+
+So the shipped configuration is fine to keep -- it wins on all four metrics
+at once and carries strictly more information -- but the *reason* to keep it
+is not that it measurably beats the alternatives, because it does not. Any
+future `state` change needs cross-validation, not a single full-corpus score,
+before it can claim an improvement.
 
 ### What goes in `state`
 
@@ -256,11 +288,10 @@ the mismatch rather than the variant:
 | **full guidance + metadata** | **0.95** | **0.40** | **0.890** | **0.914** | **0.934** | **0.862** |
 
 Metadata on its own is the worst variant and only helps alongside the full
-rulebook, which is either a real interaction or an artifact of a 12-episode
-corpus. **Treat the 0.005 F0.5 gap between the top and bottom rows as noise**:
-two runs of one identical configuration differed by 0.017 F1. The reason to
-prefer the last row is that it wins on all four metrics at once and carries
-strictly more information, not that the corpus can separate it.
+rulebook. Cross-validation says that apparent interaction is noise: these
+four rows are not separable on twelve episodes, and picking the best-looking
+one costs 0.083 F0.5 on held-out data. Two runs of one identical
+configuration differed by 0.017 F1, which is the scale these gaps live at.
 
 **These thresholds were fitted on the same 12 episodes they are scored on, so
 0.909 is optimistic.** Treat it as "worth a real evaluation", not as a

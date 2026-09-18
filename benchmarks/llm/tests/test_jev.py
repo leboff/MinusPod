@@ -309,6 +309,75 @@ class TestProbabilityCache:
         assert jev.ProbabilityCache(tmp_path / "absent.json")._data == {}
 
 
+class TestCrossValidation:
+    @staticmethod
+    def _scorer(table):
+        def score_fn(ep_id, enter, stay):
+            s = jev.EpisodeScore(ep_id=ep_id, is_no_ad=False)
+            s.f05 = table[(ep_id, enter, stay)]
+            return s
+        return score_fn
+
+    def test_mean_f05_ignores_no_ad_episodes(self):
+        a = jev.EpisodeScore(ep_id="a", is_no_ad=False)
+        a.f05 = 0.8
+        b = jev.EpisodeScore(ep_id="b", is_no_ad=True)
+        b.f05 = 0.0
+        assert jev.mean_f05([a, b]) == pytest.approx(0.8)
+
+    def test_mean_f05_of_nothing_is_zero(self):
+        assert jev.mean_f05([]) == 0.0
+
+    def test_tune_picks_the_grid_maximum(self):
+        grid = [(0.9, 0.4), (0.95, 0.4)]
+        table = {("a", 0.9, 0.4): 0.5, ("a", 0.95, 0.4): 0.9}
+        enter, stay, f05 = jev.tune_thresholds(
+            ["a"], self._scorer(table), grid=grid)
+        assert (enter, stay, f05) == (0.95, 0.4, 0.9)
+
+    def test_every_episode_is_held_out_exactly_once(self):
+        grid = [(0.9, 0.4)]
+        ids = ["a", "b", "c", "d"]
+        table = {(e, 0.9, 0.4): 0.5 for e in ids}
+        folds = jev.cross_validate(ids, self._scorer(table), fold_size=2,
+                                   grid=grid, fixed=(0.9, 0.4))
+        assert [f.held_out for f in folds] == [("a", "b"), ("c", "d")]
+
+    def test_ragged_final_fold_is_kept(self):
+        grid = [(0.9, 0.4)]
+        ids = ["a", "b", "c"]
+        table = {(e, 0.9, 0.4): 0.5 for e in ids}
+        folds = jev.cross_validate(ids, self._scorer(table), fold_size=2,
+                                   grid=grid, fixed=(0.9, 0.4))
+        assert folds[-1].held_out == ("c",)
+
+    def test_tuning_never_sees_the_held_out_episodes(self):
+        # 'b' scores well at the second setting, 'a' at the first. Holding out
+        # 'b' must select on 'a' alone, so the fold reports b's weaker score.
+        grid = [(0.9, 0.4), (0.95, 0.4)]
+        table = {
+            ("a", 0.9, 0.4): 0.9, ("a", 0.95, 0.4): 0.1,
+            ("b", 0.9, 0.4): 0.2, ("b", 0.95, 0.4): 1.0,
+        }
+        (fold,) = jev.cross_validate(
+            ["a", "b"], self._scorer(table), fold_size=1, grid=grid,
+            fixed=(0.9, 0.4))[1:]
+        assert fold.held_out == ("b",)
+        assert (fold.enter, fold.stay) == (0.9, 0.4)
+        assert fold.test_f05 == pytest.approx(0.2)
+
+    def test_fixed_column_uses_the_shipped_defaults(self):
+        grid = [(0.9, 0.4), (0.95, 0.4)]
+        table = {
+            ("a", 0.9, 0.4): 0.9, ("a", 0.95, 0.4): 0.1,
+            ("b", 0.9, 0.4): 0.2, ("b", 0.95, 0.4): 1.0,
+        }
+        (fold,) = jev.cross_validate(
+            ["a", "b"], self._scorer(table), fold_size=1, grid=grid,
+            fixed=(0.95, 0.4))[1:]
+        assert fold.fixed_f05 == pytest.approx(1.0)
+
+
 class TestParseResponse:
     def test_reads_noul_probabilities_and_usage(self):
         body = {

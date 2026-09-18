@@ -598,6 +598,75 @@ def score_episode(
     return score
 
 
+# --- threshold generalization ---------------------------------------------
+
+THRESHOLD_GRID = tuple(
+    (enter, stay)
+    for enter in (0.70, 0.80, 0.90, 0.95, 0.97, 0.98, 0.99)
+    for stay in (0.30, 0.40, 0.50, 0.60, 0.70)
+    if stay <= enter
+)
+
+
+def mean_f05(scores: Sequence[EpisodeScore]) -> float:
+    ad = [s for s in scores if not s.is_no_ad]
+    return sum(s.f05 for s in ad) / len(ad) if ad else 0.0
+
+
+def tune_thresholds(episode_ids: Sequence[str],
+                    score_fn: Callable[[str, float, float], EpisodeScore],
+                    *, grid: Sequence[tuple[float, float]] = THRESHOLD_GRID
+                    ) -> tuple[float, float, float]:
+    """Pick the (enter, stay) maximizing mean F0.5 over ``episode_ids``."""
+    best = (0.0, grid[0][0], grid[0][1])
+    for enter, stay in grid:
+        f05 = mean_f05([score_fn(ep, enter, stay) for ep in episode_ids])
+        if f05 > best[0]:
+            best = (f05, enter, stay)
+    return best[1], best[2], best[0]
+
+
+@dataclass
+class Fold:
+    held_out: tuple[str, ...]
+    enter: float
+    stay: float
+    train_f05: float
+    test_f05: float
+    fixed_f05: float
+
+
+def cross_validate(episode_ids: Sequence[str],
+                   score_fn: Callable[[str, float, float], EpisodeScore],
+                   *, fold_size: int = 2,
+                   fixed: tuple[float, float] = (ENTER_THRESHOLD, STAY_THRESHOLD),
+                   grid: Sequence[tuple[float, float]] = THRESHOLD_GRID
+                   ) -> list[Fold]:
+    """Tune on all but ``fold_size`` episodes, score those, repeat.
+
+    ``fixed_f05`` scores the same held-out episodes at the shipped defaults.
+    If tuning generalizes it beats that column; if it only fits noise it does
+    not, and the shipped numbers are the honest ones.
+    """
+    ids = list(episode_ids)
+    folds = []
+    for i in range(0, len(ids), fold_size):
+        held = tuple(ids[i:i + fold_size])
+        if not held:
+            continue
+        train = [e for e in ids if e not in held]
+        enter, stay, train_f05 = tune_thresholds(train, score_fn, grid=grid)
+        folds.append(Fold(
+            held_out=held,
+            enter=enter,
+            stay=stay,
+            train_f05=train_f05,
+            test_f05=mean_f05([score_fn(e, enter, stay) for e in held]),
+            fixed_f05=mean_f05([score_fn(e, *fixed) for e in held]),
+        ))
+    return folds
+
+
 def metrics_iou_threshold() -> float:
     from .report.aggregate import DEFAULT_IOU_THRESHOLD
     return DEFAULT_IOU_THRESHOLD
