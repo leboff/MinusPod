@@ -136,6 +136,76 @@ class TestPayload:
         assert "uid" not in jev.build_payload(contiguous(2))["state"]
 
 
+class TestConfirmPolicy:
+    def test_accepts_a_clear_ad(self):
+        assert jev.ConfirmPolicy().accepts(
+            {"is_ad": 0.98, "promotional_language": 0.98})
+
+    def test_rejects_below_is_ad(self):
+        assert not jev.ConfirmPolicy().accepts(
+            {"is_ad": 0.1, "promotional_language": 0.98})
+
+    def test_rejects_without_promotional_language(self):
+        assert not jev.ConfirmPolicy().accepts(
+            {"is_ad": 0.98, "promotional_language": 0.05})
+
+    def test_either_exclusion_signal_rejects(self):
+        base = {"is_ad": 0.98, "promotional_language": 0.98}
+        assert not jev.ConfirmPolicy().accepts({**base, "guest_own_work": 0.9})
+        assert not jev.ConfirmPolicy().accepts({**base, "host_organic": 0.9})
+
+    def test_missing_signals_read_as_zero(self):
+        assert not jev.ConfirmPolicy().accepts({})
+
+    def test_bounds_are_independent(self):
+        answers = {"is_ad": 0.6, "promotional_language": 0.98}
+        assert jev.ConfirmPolicy(min_is_ad=0.5).accepts(answers)
+        assert not jev.ConfirmPolicy(min_is_ad=0.7).accepts(answers)
+
+
+class TestConfirmSpans:
+    def test_span_members_are_selected_by_time_not_id(self):
+        segs = contiguous(6)
+        # A merged span carries a stale end_id; time must still bound it.
+        ad = {"start": 10.0, "end": 40.0, "start_id": 1, "end_id": 1}
+        seen = {}
+
+        def source(payload):
+            seen["span"] = payload["state"]["span"]
+            return {"is_ad": 0.99, "promotional_language": 0.99}
+
+        kept = jev.confirm_spans([ad], segs, source, policy=jev.ConfirmPolicy())
+        assert len(kept) == 1
+        assert seen["span"].split().count("words") == 3
+
+    def test_rejected_span_is_dropped(self):
+        segs = contiguous(3)
+        ad = {"start": 0.0, "end": 10.0, "start_id": 0, "end_id": 0}
+        kept = jev.confirm_spans(
+            [ad], segs, lambda p: {"is_ad": 0.01}, policy=jev.ConfirmPolicy())
+        assert kept == []
+
+    def test_answers_are_attached_to_survivors(self):
+        segs = contiguous(3)
+        ad = {"start": 0.0, "end": 10.0, "start_id": 0, "end_id": 0}
+        answers = {"is_ad": 0.99, "promotional_language": 0.99}
+        (kept,) = jev.confirm_spans(
+            [ad], segs, lambda p: answers, policy=jev.ConfirmPolicy())
+        assert kept["confirm"] == answers
+
+    def test_payload_carries_surrounding_context(self):
+        segs = contiguous(6)
+        payload = jev.build_confirm_payload([segs[2]], segs)
+        assert payload["state"]["content_before"]
+        assert payload["state"]["content_after"]
+        assert set(payload["questions"]) == set(jev.CONFIRM_QUESTIONS)
+
+    def test_span_at_episode_start_has_empty_before(self):
+        segs = contiguous(4)
+        payload = jev.build_confirm_payload([segs[0]], segs)
+        assert payload["state"]["content_before"] == ""
+
+
 class TestAggregatePasses:
     def test_mean_across_passes(self):
         a = jev.WindowResult({0: 1.0, 1: 0.0})

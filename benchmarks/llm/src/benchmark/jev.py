@@ -141,26 +141,35 @@ def parse_response(body: dict) -> WindowResult:
     )
 
 
-def call_window(segments: Sequence[dict], *, api_key: str,
-                model: str = DEFAULT_MODEL, uid: str | None = None,
-                timeout: float = 60.0) -> WindowResult:
+def call_payload(payload: dict, *, api_key: str, timeout: float = 60.0) -> dict:
     resp = requests.post(
         API_URL,
         headers={"Authorization": f"Bearer {api_key}",
                  "Content-Type": "application/json"},
-        json=build_payload(segments, model=model, uid=uid),
+        json=payload,
         timeout=timeout,
     )
     resp.raise_for_status()
-    return parse_response(resp.json())
+    return resp.json()
+
+
+def call_window(segments: Sequence[dict], *, api_key: str,
+                model: str = DEFAULT_MODEL, uid: str | None = None,
+                timeout: float = 60.0) -> WindowResult:
+    body = call_payload(build_payload(segments, model=model, uid=uid),
+                        api_key=api_key, timeout=timeout)
+    return parse_response(body)
+
+
+def hash_payload(payload: dict) -> str:
+    """Cache key covering everything that would change the answer."""
+    return hashlib.sha256(
+        json.dumps(payload, sort_keys=True).encode()).hexdigest()[:16]
 
 
 def payload_key(segments: Sequence[dict], *, model: str = DEFAULT_MODEL,
                 uid: str | None = None) -> str:
-    """Cache key covering everything that would change the answer."""
-    blob = json.dumps(build_payload(segments, model=model, uid=uid),
-                      sort_keys=True)
-    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+    return hash_payload(build_payload(segments, model=model, uid=uid))
 
 
 class ProbabilityCache:
@@ -180,29 +189,47 @@ class ProbabilityCache:
         self.hits = 0
         self.misses = 0
 
+    def nouls(self, payload: dict, *, api_key: str | None) -> dict[str, float]:
+        """Every Noul answer in the response, keyed as the question was.
+
+        Pass A keys questions by segment, Pass B by rule name, so the cache
+        stores whatever came back and each caller reads it its own way.
+        """
+        key = hash_payload(payload)
+        entry = self._data.get(key)
+        if entry is None:
+            if api_key is None:
+                raise KeyError(
+                    f"no cached answers for {key} and no API key to fetch them")
+            body = call_payload(payload, api_key=api_key)
+            usage = body.get("usage") or {}
+            entry = {
+                "probabilities": {
+                    k: a["noul"] for k, a in (body.get("answers") or {}).items()
+                    if isinstance(a, dict) and isinstance(a.get("noul"), (int, float))
+                },
+                "input_tokens": int(usage.get("input_tokens") or 0),
+                "output_tokens": int(usage.get("output_tokens") or 0),
+            }
+            self._data[key] = entry
+            self.misses += 1
+        else:
+            self.hits += 1
+        return entry
+
     def get_or_call(self, segments: Sequence[dict], *, api_key: str | None,
                     model: str = DEFAULT_MODEL,
                     uid: str | None = None) -> WindowResult:
-        key = payload_key(segments, model=model, uid=uid)
-        entry = self._data.get(key)
-        if entry is not None:
-            self.hits += 1
-            return WindowResult(
-                probabilities={int(k): v for k, v in entry["probabilities"].items()},
-                input_tokens=entry.get("input_tokens", 0),
-                output_tokens=entry.get("output_tokens", 0),
-            )
-        if api_key is None:
-            raise KeyError(
-                f"no cached probabilities for window {key} and no API key to fetch them")
-        result = call_window(segments, api_key=api_key, model=model, uid=uid)
-        self.misses += 1
-        self._data[key] = {
-            "probabilities": {str(k): v for k, v in result.probabilities.items()},
-            "input_tokens": result.input_tokens,
-            "output_tokens": result.output_tokens,
-        }
-        return result
+        entry = self.nouls(
+            build_payload(segments, model=model, uid=uid), api_key=api_key)
+        return WindowResult(
+            probabilities={
+                int(k[1:]) if k.startswith("s") else int(k): v
+                for k, v in entry["probabilities"].items()
+            },
+            input_tokens=entry.get("input_tokens", 0),
+            output_tokens=entry.get("output_tokens", 0),
+        )
 
     def save(self) -> None:
         self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -298,6 +325,117 @@ def oracle_probabilities(
 
 # --- episode scoring -----------------------------------------------------
 
+# --- Pass B: span-level confirmation --------------------------------------
+
+# Pass A judges one segment in isolation, which is a badly posed question: a
+# 26-second fragment mid-break carries no sponsor name and reads like
+# conversation. These judge the assembled candidate span instead, with the
+# surrounding content supplied so "tonally separate" is answerable. They are
+# independent, so they ride in one request and code owns the policy.
+CONFIRM_QUESTIONS = {
+    "is_ad": (
+        "Taken as a whole, `span` is an advertisement: a sponsor read, a "
+        "produced ad spot, a dynamically inserted ad, a platform pre-roll or "
+        "post-roll, or a cross-promotion for another show."
+    ),
+    "promotional_language": (
+        "`span` contains explicit promotional language: a sponsor or brand "
+        "name being promoted, a URL, a promo code, a product pitch, or a call "
+        "to action."
+    ),
+    "produced_insert": (
+        "`span` is a produced segment that is tonally separate from "
+        "`content_before` and `content_after`, rather than a continuation of "
+        "the same conversation."
+    ),
+    "guest_own_work": (
+        "`span` is a guest discussing their own book, project, or work as "
+        "part of the episode's interview."
+    ),
+    "host_organic": (
+        "`span` is the host mentioning their own show, Patreon, merch, or "
+        "social media in passing during conversation, rather than a produced "
+        "promotional insert."
+    ),
+}
+
+CONTEXT_SEGMENTS = 2
+
+
+def _joined(segments: Sequence[dict]) -> str:
+    return " ".join(s.get("text", "").strip() for s in segments)
+
+
+def build_confirm_payload(span_segments: Sequence[dict],
+                          all_segments: Sequence[dict], *,
+                          model: str = DEFAULT_MODEL,
+                          uid: str | None = None,
+                          context: int = CONTEXT_SEGMENTS) -> dict:
+    ordered = sorted(all_segments, key=lambda s: s["start"])
+    sids = {s["sid"] for s in span_segments}
+    idx = [i for i, s in enumerate(ordered) if s["sid"] in sids]
+    lo, hi = (min(idx), max(idx)) if idx else (0, -1)
+
+    state: dict[str, object] = {
+        "guidance": GUIDANCE,
+        "content_before": _joined(ordered[max(0, lo - context):lo]),
+        "span": _joined(span_segments),
+        "content_after": _joined(ordered[hi + 1:hi + 1 + context]),
+    }
+    if uid is not None:
+        state["uid"] = uid
+    return {
+        "state": state,
+        "model": model,
+        "questions": {
+            name: {"type": "noul", "instructions": text}
+            for name, text in CONFIRM_QUESTIONS.items()
+        },
+    }
+
+
+@dataclass(frozen=True)
+class ConfirmPolicy:
+    """Code owns the decision; the model only supplies the signals.
+
+    Each bound is a separate knob so a false-positive class can be tightened
+    without disturbing the others, which a single fused score cannot do.
+    """
+    min_is_ad: float = 0.5
+    min_promotional: float = 0.5
+    max_exclusion: float = 0.5
+
+    def accepts(self, answers: dict[str, float]) -> bool:
+        get = lambda k: answers.get(k, 0.0)  # noqa: E731
+        if get("is_ad") < self.min_is_ad:
+            return False
+        if get("promotional_language") < self.min_promotional:
+            return False
+        excluded = max(get("guest_own_work"), get("host_organic"))
+        return excluded <= self.max_exclusion
+
+
+def confirm_spans(ads: Sequence[dict], all_segments: Sequence[dict],
+                  answer_source: Callable[[dict], dict[str, float]], *,
+                  policy: ConfirmPolicy) -> list[dict]:
+    """Drop candidate spans the confirmation questions reject."""
+    kept = []
+    for ad in ads:
+        # By time, not by the id range: canonicalize_ads merges spans without
+        # updating end_id, so a merged span's ids no longer bound it.
+        members = [s for s in sorted(all_segments, key=lambda s: s["start"])
+                   if s["start"] < ad["end"] and s["end"] > ad["start"]]
+        if not members:
+            continue
+        answers = answer_source(
+            build_confirm_payload(members, all_segments))
+        if policy.accepts(answers):
+            ad = dict(ad)
+            ad["confirm"] = answers
+            kept.append(ad)
+    return kept
+
+
 def aggregate_passes(results: Sequence[WindowResult]) -> WindowResult:
     """Mean probability per segment across independent passes.
 
@@ -357,11 +495,15 @@ def score_episode(
     *,
     enter: float = ENTER_THRESHOLD,
     stay: float = STAY_THRESHOLD,
+    confirm: Callable[[Sequence[dict], Sequence[dict]], list[dict]] | None = None,
 ) -> EpisodeScore:
     """Run Pass A over every window, stitch, and score.
 
     Mirrors ``report.aggregate``: flatten per-window ads, canonicalize both
     sides at a 15s gap, then greedy IoU match at 0.5.
+
+    With ``confirm``, Pass A runs as a recall-first candidate generator and
+    the survivors of that second stage are what get scored.
     """
     per_window_ads: list[list[dict]] = []
     input_tokens = 0
@@ -374,6 +516,10 @@ def score_episode(
 
     flat = [ad for window in per_window_ads for ad in window]
     flat = metrics.canonicalize_ads(flat)
+    if confirm is not None:
+        all_segments = [s for w in windows for s in w]
+        flat = confirm(flat, all_segments)
+        per_window_ads = [[a for a in flat]] if flat else [[]]
     preds = [(ad["start"], ad["end"]) for ad in flat]
 
     score = EpisodeScore(

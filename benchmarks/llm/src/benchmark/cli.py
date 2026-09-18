@@ -462,6 +462,10 @@ def jev_spike_cmd(
     passes: int = typer.Option(
         1, "--passes",
         help="Independent draws per window, averaged. Only meaningful live."),
+    confirm: bool = typer.Option(
+        False, "--confirm",
+        help="Pass B: treat Pass A as a recall-first candidate generator and "
+             "confirm each span with a second span-level request."),
     corpus_dir: Optional[Path] = typer.Option(None, "--corpus-dir"),
 ) -> None:
     """Pass-A spike: per-segment ad-ness judgments scored against the corpus.
@@ -504,9 +508,23 @@ def jev_spike_cmd(
                     probabilities=jev.oracle_probabilities(
                         segs, _ep.truth.ads, policy=_policy))
 
+        confirm_fn = None
+        if confirm:
+            if cache is None:
+                typer.echo("--confirm needs live probabilities; drop --oracle.", err=True)
+                raise typer.Exit(2)
+
+            def confirm_fn(ads, all_segs, _cache=cache, _key=api_key):
+                return jev.confirm_spans(
+                    ads, all_segs,
+                    lambda payload: _cache.nouls(
+                        payload, api_key=_key)["probabilities"],
+                    policy=jev.ConfirmPolicy())
+
         try:
             scores.append(jev.score_episode(
-                episode, windows, source, enter=enter, stay=stay))
+                episode, windows, source, enter=enter, stay=stay,
+                confirm=confirm_fn))
         except KeyError as e:
             if cache:
                 cache.save()

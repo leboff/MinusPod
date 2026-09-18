@@ -266,6 +266,44 @@ its own cache entry) and averages them, which pushes segments the passes
 disagree on below the enter threshold instead of letting a coin flip open a
 run. Not yet evaluated.
 
+### Pass B (`--confirm`): tried, does not help
+
+Pass A opens a run only at `enter` 0.98, which is doing two jobs at once --
+"is this an ad" and "am I sure enough to cut". The obvious fix is to split
+them: generate candidates at a loose threshold, then confirm each assembled
+span with a second request (`CONFIRM_QUESTIONS`: `is_ad`,
+`promotional_language`, `produced_insert`, `guest_own_work`, `host_organic`),
+with `ConfirmPolicy` combining them in code.
+
+It does not work, in either arrangement:
+
+| Configuration | F1 | F0.5 | Precision | Recall |
+|---|---|---|---|---|
+| Pass A tuned, no confirmation | 0.883 | **0.909** | 0.929 | 0.851 |
+| Loose candidates (0.60) + best policy | 0.814 | 0.811 | 0.812 | 0.834 |
+| Tuned candidates (0.98) + any policy | 0.883 | 0.909 | 0.929 | 0.851 |
+
+On tuned candidates confirmation rejects **nothing**: no `min_is_ad` between
+0 and 0.7 changes a single span, and above that it only loses recall while
+precision stays pinned at 0.929. On loose candidates it does filter
+(precision 0.632 -> 0.812) but never recovers the ground given up.
+
+The reason is that the premise was wrong. Pass A's per-segment Nouls already
+receive the **whole window** as state -- every question sees every line, they
+just answer about their own -- so a segment was never being judged as an
+isolated fragment. Re-asking at span level gives the model no information it
+did not already have. The residual errors are genuine model disagreement, not
+question framing.
+
+`max_exclusion` is inert throughout: `guest_own_work` and `host_organic`
+essentially never fire on real candidates, so those two questions earn
+nothing on this corpus.
+
+The code is kept because the negative result is cheap to re-verify and the
+`ConfirmPolicy` shape is the right one if the signals ever become
+discriminating. Improving accuracy from here means attacking model judgment
+directly -- richer `guidance`, episode metadata in `state` -- not more stages.
+
 ## Adding a new model or episode
 
 - New model: append `[[models]]` to `benchmark.toml`. `benchmark run` will fill the gaps (existing models stay cached).
