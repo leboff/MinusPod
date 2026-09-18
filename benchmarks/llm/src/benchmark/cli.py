@@ -459,6 +459,9 @@ def jev_spike_cmd(
              "'overlap', 'majority', or 'off' for live calls."),
     enter: float = typer.Option(jev.ENTER_THRESHOLD, "--enter"),
     stay: float = typer.Option(jev.STAY_THRESHOLD, "--stay"),
+    passes: int = typer.Option(
+        1, "--passes",
+        help="Independent draws per window, averaged. Only meaningful live."),
     corpus_dir: Optional[Path] = typer.Option(None, "--corpus-dir"),
 ) -> None:
     """Pass-A spike: per-segment ad-ness judgments scored against the corpus.
@@ -474,12 +477,11 @@ def jev_spike_cmd(
         typer.echo(f"no corpus episodes under {root}", err=True)
         raise typer.Exit(1)
 
+    cache = None
     api_key = None
     if oracle == "off":
+        cache = jev.ProbabilityCache(_root() / "results" / "raw" / "jev_cache.json")
         api_key = jev.api_key_from_env()
-        if not api_key:
-            typer.echo("TYPESAFE_API_KEY is not set; use --oracle to run offline.", err=True)
-            raise typer.Exit(1)
 
     scores: list[jev.EpisodeScore] = []
     est_tokens = 0
@@ -489,16 +491,32 @@ def jev_spike_cmd(
         est_tokens += jev.estimate_input_tokens(windows)
 
         if oracle == "off":
-            def source(segs, _key=api_key):
-                return jev.call_window(segs, api_key=_key)
+            def source(segs, _cache=cache, _key=api_key, _n=passes):
+                return jev.aggregate_passes([
+                    _cache.get_or_call(
+                        segs, api_key=_key,
+                        uid=None if _n == 1 else f"pass-{i}")
+                    for i in range(_n)
+                ])
         else:
             def source(segs, _policy=oracle, _ep=episode):
                 return jev.WindowResult(
                     probabilities=jev.oracle_probabilities(
                         segs, _ep.truth.ads, policy=_policy))
 
-        scores.append(jev.score_episode(
-            episode, windows, source, enter=enter, stay=stay))
+        try:
+            scores.append(jev.score_episode(
+                episode, windows, source, enter=enter, stay=stay))
+        except KeyError as e:
+            if cache:
+                cache.save()
+            typer.echo(f"{e}\nSet TYPESAFE_API_KEY to populate the cache.", err=True)
+            raise typer.Exit(1) from e
+
+    if cache:
+        cache.save()
+        typer.echo(f"cache: {cache.hits} hit, {cache.misses} fetched "
+                   f"-> {cache.path.relative_to(_root())}")
 
     _echo_jev_table(scores, est_tokens=est_tokens, oracle=oracle)
 

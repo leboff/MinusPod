@@ -10,10 +10,12 @@ in ``results/report.md``.
 """
 from __future__ import annotations
 
+import hashlib
 import json
 import os
 from dataclasses import dataclass, field
 from collections.abc import Callable, Iterable, Sequence
+from pathlib import Path
 
 import requests
 
@@ -31,8 +33,14 @@ INPUT_COST_PER_MTOK = 0.042
 # here span 3-5 segments and a mid-break segment often reads weaker than its
 # neighbours (station ident, a beat of silence), which a single threshold
 # would split into two spans.
-ENTER_THRESHOLD = 0.60
-STAY_THRESHOLD = 0.40
+# Swept against the cached corpus. The signal is strongly bimodal -- 39% of
+# segments come back at 0.02 and the top bucket is 0.98 -- so a run should
+# only open on near-certainty, then extend generously across the weaker
+# shoulders of the same break. Loosening `enter` to 0.6 costs 27 points of
+# precision (0.929 -> 0.632) for 5 points of recall. Jev reports two decimal
+# places and tops out at 0.99, so anything above 0.99 matches nothing at all.
+ENTER_THRESHOLD = 0.98
+STAY_THRESHOLD = 0.50
 
 # A run breaks across a silence gap wider than this. Swept against the oracle
 # over the corpus: precision climbs to 1.000 at 30s and is flat from there to
@@ -147,6 +155,60 @@ def call_window(segments: Sequence[dict], *, api_key: str,
     return parse_response(resp.json())
 
 
+def payload_key(segments: Sequence[dict], *, model: str = DEFAULT_MODEL,
+                uid: str | None = None) -> str:
+    """Cache key covering everything that would change the answer."""
+    blob = json.dumps(build_payload(segments, model=model, uid=uid),
+                      sort_keys=True)
+    return hashlib.sha256(blob.encode()).hexdigest()[:16]
+
+
+class ProbabilityCache:
+    """Disk cache of per-window probabilities.
+
+    Thresholds are tuned by re-reading these, not by re-asking: a sweep over
+    a cached corpus costs nothing, so the only spend is the first pass.
+    Keyed by payload hash, so editing a question invalidates its entries
+    rather than silently scoring stale answers.
+    """
+
+    def __init__(self, path: Path):
+        self.path = path
+        self._data: dict[str, dict] = {}
+        if path.is_file():
+            self._data = json.loads(path.read_text())
+        self.hits = 0
+        self.misses = 0
+
+    def get_or_call(self, segments: Sequence[dict], *, api_key: str | None,
+                    model: str = DEFAULT_MODEL,
+                    uid: str | None = None) -> WindowResult:
+        key = payload_key(segments, model=model, uid=uid)
+        entry = self._data.get(key)
+        if entry is not None:
+            self.hits += 1
+            return WindowResult(
+                probabilities={int(k): v for k, v in entry["probabilities"].items()},
+                input_tokens=entry.get("input_tokens", 0),
+                output_tokens=entry.get("output_tokens", 0),
+            )
+        if api_key is None:
+            raise KeyError(
+                f"no cached probabilities for window {key} and no API key to fetch them")
+        result = call_window(segments, api_key=api_key, model=model, uid=uid)
+        self.misses += 1
+        self._data[key] = {
+            "probabilities": {str(k): v for k, v in result.probabilities.items()},
+            "input_tokens": result.input_tokens,
+            "output_tokens": result.output_tokens,
+        }
+        return result
+
+    def save(self) -> None:
+        self.path.parent.mkdir(parents=True, exist_ok=True)
+        self.path.write_text(json.dumps(self._data, indent=0, sort_keys=True))
+
+
 # --- probability curve -> spans ------------------------------------------
 
 def spans_from_probabilities(
@@ -235,6 +297,42 @@ def oracle_probabilities(
 
 
 # --- episode scoring -----------------------------------------------------
+
+def aggregate_passes(results: Sequence[WindowResult]) -> WindowResult:
+    """Mean probability per segment across independent passes.
+
+    Averaging is the point of repeating: a segment both passes agree on keeps
+    its value, while one they split on lands mid-scale and falls below the
+    enter threshold instead of opening a run on a coin flip.
+    """
+    if not results:
+        return WindowResult(probabilities={})
+    sids = {sid for r in results for sid in r.probabilities}
+    return WindowResult(
+        probabilities={
+            sid: sum(r.probabilities.get(sid, 0.0) for r in results) / len(results)
+            for sid in sids
+        },
+        input_tokens=sum(r.input_tokens for r in results),
+        output_tokens=sum(r.output_tokens for r in results),
+    )
+
+
+def pass_spread(results: Sequence[WindowResult]) -> dict[int, float]:
+    """Max-minus-min probability per segment across passes.
+
+    A segment with a wide spread is genuinely contested rather than merely
+    mid-confidence, which is the distinction a single pass cannot make.
+    """
+    if len(results) < 2:
+        return {}
+    sids = {sid for r in results for sid in r.probabilities}
+    spread = {}
+    for sid in sids:
+        vals = [r.probabilities.get(sid, 0.0) for r in results]
+        spread[sid] = max(vals) - min(vals)
+    return spread
+
 
 @dataclass
 class EpisodeScore:

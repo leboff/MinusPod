@@ -14,66 +14,77 @@ def contiguous(n: int, *, length: float = 10.0, start: float = 0.0) -> list[dict
     return [seg(i, start + i * length, start + (i + 1) * length) for i in range(n)]
 
 
+# Run recovery is tested against fixed thresholds, not the tuned defaults:
+# ENTER/STAY are fitted to corpus data and are expected to move.
+ENTER, STAY = 0.60, 0.40
+
+
+def spans(segments, probabilities, **kw):
+    kw.setdefault('enter', ENTER)
+    kw.setdefault('stay', STAY)
+    return jev.spans_from_probabilities(segments, probabilities, **kw)
+
+
 class TestSpansFromProbabilities:
     def test_empty_when_nothing_clears_enter(self):
         segs = contiguous(5)
         probs = {i: 0.5 for i in range(5)}
-        assert jev.spans_from_probabilities(segs, probs) == []
+        assert spans(segs, probs) == []
 
     def test_single_run_spans_segment_edges(self):
         segs = contiguous(5)
         probs = {0: 0.0, 1: 0.9, 2: 0.9, 3: 0.0, 4: 0.0}
-        (ad,) = jev.spans_from_probabilities(segs, probs)
+        (ad,) = spans(segs, probs)
         assert (ad["start"], ad["end"]) == (10.0, 30.0)
         assert (ad["start_id"], ad["end_id"]) == (1, 2)
 
     def test_boundaries_are_never_interpolated(self):
         segs = [seg(0, 0.0, 7.3), seg(1, 7.3, 21.9), seg(2, 21.9, 30.0)]
         probs = {0: 0.0, 1: 0.95, 2: 0.0}
-        (ad,) = jev.spans_from_probabilities(segs, probs)
+        (ad,) = spans(segs, probs)
         assert ad["start"] == 7.3
         assert ad["end"] == 21.9
 
     def test_hysteresis_bridges_a_weak_middle_segment(self):
         segs = contiguous(5)
         probs = {0: 0.0, 1: 0.9, 2: 0.45, 3: 0.9, 4: 0.0}
-        spans = jev.spans_from_probabilities(segs, probs)
-        assert len(spans) == 1
-        assert (spans[0]["start"], spans[0]["end"]) == (10.0, 40.0)
+        recovered = spans(segs, probs)
+        assert len(recovered) == 1
+        assert (recovered[0]["start"], recovered[0]["end"]) == (10.0, 40.0)
 
     def test_run_of_only_weak_segments_is_not_an_ad(self):
         segs = contiguous(4)
         probs = {i: 0.45 for i in range(4)}
-        assert jev.spans_from_probabilities(segs, probs) == []
+        assert spans(segs, probs) == []
 
     def test_confidence_is_the_run_maximum(self):
         segs = contiguous(3)
         probs = {0: 0.62, 1: 0.97, 2: 0.55}
-        (ad,) = jev.spans_from_probabilities(segs, probs)
+        (ad,) = spans(segs, probs)
         assert ad["confidence"] == pytest.approx(0.97)
 
     def test_run_breaks_across_a_wide_silence_gap(self):
         # Adjacent in the list, 40s apart in time: two breaks, not one.
         segs = [seg(0, 0.0, 30.0), seg(1, 70.0, 100.0)]
         probs = {0: 0.9, 1: 0.9}
-        spans = jev.spans_from_probabilities(segs, probs)
-        assert [(s["start"], s["end"]) for s in spans] == [(0.0, 30.0), (70.0, 100.0)]
+        recovered = spans(segs, probs)
+        assert [(s["start"], s["end"]) for s in recovered] == [(0.0, 30.0), (70.0, 100.0)]
 
     def test_run_survives_a_narrow_silence_gap(self):
         segs = [seg(0, 0.0, 30.0), seg(1, 35.0, 60.0)]
         probs = {0: 0.9, 1: 0.9}
-        (ad,) = jev.spans_from_probabilities(segs, probs)
+        (ad,) = spans(segs, probs)
         assert (ad["start"], ad["end"]) == (0.0, 60.0)
 
     def test_missing_probability_reads_as_not_an_ad(self):
         segs = contiguous(3)
-        (ad,) = jev.spans_from_probabilities(segs, {1: 0.9})
+        (ad,) = spans(segs, {1: 0.9})
         assert (ad["start_id"], ad["end_id"]) == (1, 1)
 
     def test_unsorted_input_is_ordered_by_time(self):
         segs = list(reversed(contiguous(4)))
         probs = {1: 0.9, 2: 0.9}
-        (ad,) = jev.spans_from_probabilities(segs, probs)
+        (ad,) = spans(segs, probs)
         assert (ad["start"], ad["end"]) == (10.0, 30.0)
 
     def test_stay_above_enter_is_rejected(self):
@@ -123,6 +134,81 @@ class TestPayload:
 
     def test_no_uid_key_when_not_requested(self):
         assert "uid" not in jev.build_payload(contiguous(2))["state"]
+
+
+class TestAggregatePasses:
+    def test_mean_across_passes(self):
+        a = jev.WindowResult({0: 1.0, 1: 0.0})
+        b = jev.WindowResult({0: 0.0, 1: 0.0})
+        assert jev.aggregate_passes([a, b]).probabilities == {0: 0.5, 1: 0.0}
+
+    def test_a_contested_segment_falls_below_enter(self):
+        # One pass says yes, one says no: the mean must not open a run.
+        agreed = jev.aggregate_passes(
+            [jev.WindowResult({0: 0.98}), jev.WindowResult({0: 0.02})])
+        assert agreed.probabilities[0] < jev.ENTER_THRESHOLD
+
+    def test_agreement_survives_averaging(self):
+        agreed = jev.aggregate_passes(
+            [jev.WindowResult({0: 0.98}), jev.WindowResult({0: 0.98})])
+        assert agreed.probabilities[0] >= jev.ENTER_THRESHOLD
+
+    def test_missing_segment_counts_as_zero(self):
+        out = jev.aggregate_passes(
+            [jev.WindowResult({0: 1.0}), jev.WindowResult({})])
+        assert out.probabilities == {0: 0.5}
+
+    def test_tokens_sum_across_passes(self):
+        out = jev.aggregate_passes([
+            jev.WindowResult({}, input_tokens=100),
+            jev.WindowResult({}, input_tokens=150),
+        ])
+        assert out.input_tokens == 250
+
+    def test_empty_is_not_an_error(self):
+        assert jev.aggregate_passes([]).probabilities == {}
+
+
+class TestPassSpread:
+    def test_spread_is_max_minus_min(self):
+        spread = jev.pass_spread(
+            [jev.WindowResult({0: 0.9, 1: 0.5}), jev.WindowResult({0: 0.3, 1: 0.5})])
+        assert spread == {0: pytest.approx(0.6), 1: pytest.approx(0.0)}
+
+    def test_single_pass_has_no_spread(self):
+        assert jev.pass_spread([jev.WindowResult({0: 0.9})]) == {}
+
+
+class TestProbabilityCache:
+    def test_round_trips_through_disk(self, tmp_path):
+        segs = contiguous(2)
+        cache = jev.ProbabilityCache(tmp_path / "c.json")
+        key = jev.payload_key(segs)
+        cache._data[key] = {"probabilities": {"0": 0.9}, "input_tokens": 5}
+        cache.save()
+
+        reloaded = jev.ProbabilityCache(tmp_path / "c.json")
+        result = reloaded.get_or_call(segs, api_key=None)
+        assert result.probabilities == {0: 0.9}
+        assert reloaded.hits == 1
+
+    def test_miss_without_a_key_raises_rather_than_scoring_zeros(self, tmp_path):
+        cache = jev.ProbabilityCache(tmp_path / "c.json")
+        with pytest.raises(KeyError):
+            cache.get_or_call(contiguous(2), api_key=None)
+
+    def test_changing_a_question_invalidates_the_key(self, tmp_path, monkeypatch):
+        segs = contiguous(2)
+        before = jev.payload_key(segs)
+        monkeypatch.setattr(jev, "GUIDANCE", "different definition")
+        assert jev.payload_key(segs) != before
+
+    def test_distinct_uids_are_distinct_draws(self):
+        segs = contiguous(2)
+        assert jev.payload_key(segs, uid="pass-0") != jev.payload_key(segs, uid="pass-1")
+
+    def test_missing_file_starts_empty(self, tmp_path):
+        assert jev.ProbabilityCache(tmp_path / "absent.json")._data == {}
 
 
 class TestParseResponse:

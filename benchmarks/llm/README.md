@@ -191,9 +191,16 @@ runs. Because a run is delimited by segment edges, no timestamp is ever
 generated, and boundaries cannot land off-grid.
 
 ```sh
-benchmark jev-spike --oracle overlap    # offline, no API key, no cost
-benchmark jev-spike --oracle off        # live, needs TYPESAFE_API_KEY
+benchmark jev-spike --oracle overlap    # offline ceiling, no API key, no cost
+benchmark jev-spike --oracle off        # live, replays results/raw/jev_cache.json
+benchmark jev-spike --oracle off --enter 0.9 --stay 0.4   # threshold sweep, free
 ```
+
+Live probabilities are cached in `results/raw/jev_cache.json`, keyed by a hash
+of the request payload, so threshold tuning costs nothing after the first
+pass and editing a question invalidates its entries rather than silently
+scoring stale answers. The cache is committed, so the numbers below reproduce
+without an API key. `TYPESAFE_API_KEY` is only needed to add new entries.
 
 `--oracle` substitutes the probabilities a *perfect* per-segment judge would
 return, derived from `truth.txt`. That measures the ceiling of the
@@ -215,11 +222,49 @@ two breaks. Lowering it to 15s recovers that one ad but over-splits real
 breaks that contain internal silence, costing more precision than it buys
 recall (mean F0.5 0.925 vs 0.996).
 
-Estimated cost of one live pass over the whole corpus is **$0.022** at
-`$0.042` per million input tokens with output unbilled, so a 10-pass
-self-consistency sweep is about $0.22. `JSON compliance` and
-`Extraction methods` do not apply here: the response is typed, so there is no
-parsing step to fail.
+### Live results
+
+One pass over the corpus at the tuned thresholds:
+
+| | F1 | F0.5 | Precision | Recall | No-ad controls |
+|---|---|---|---|---|---|
+| Jev (`jev-latest`) | 0.883 | **0.909** | 0.929 | 0.851 | PASS / PASS |
+| `claude-haiku-4-5` | 0.920 | 0.908 | 0.900 | 0.946 | PASS |
+
+Level on F0.5, which is the ranking metric here, and ahead on precision, at
+roughly 1% of the cost. Behind on recall, so it leaves more ads in while
+cutting less real content.
+
+**These thresholds were fitted on the same 12 episodes they are scored on, so
+0.909 is optimistic.** Treat it as "worth a real evaluation", not as a
+measured production number. Held-out episodes are the next step.
+
+`ENTER_THRESHOLD` / `STAY_THRESHOLD` dominate the result and were swept
+against the cache. The signal is strongly bimodal: 39% of segments come back
+at 0.02, the top bucket is 0.98, and Jev reports two decimals with a maximum
+of 0.99, so any threshold above 0.99 matches nothing. A run should open only
+on near-certainty and then extend generously across the weaker shoulders of
+the same break:
+
+| enter | stay | F1 | F0.5 | Precision | Recall |
+|---|---|---|---|---|---|
+| 0.60 | 0.40 | 0.731 | 0.667 | 0.632 | 0.903 |
+| 0.90 | 0.40 | 0.778 | 0.755 | 0.744 | 0.834 |
+| 0.95 | 0.40 | 0.827 | 0.829 | 0.834 | 0.834 |
+| **0.98** | **0.50** | **0.883** | **0.909** | **0.929** | **0.851** |
+| 0.99 | 0.50 | 0.697 | 0.774 | 0.843 | 0.610 |
+
+The no-ad controls only pass from `enter` 0.70 upward.
+
+Cost of one live pass over the whole corpus is **$0.022** at `$0.042` per
+million input tokens with output unbilled, so a 10-pass self-consistency
+sweep is about $0.22. `JSON compliance` and `Extraction methods` do not apply
+here: the response is typed, so there is no parsing step to fail.
+
+`--passes N` takes N independent draws per window (distinct `uid`, so each is
+its own cache entry) and averages them, which pushes segments the passes
+disagree on below the enter threshold instead of letting a coin flip open a
+run. Not yet evaluated.
 
 ## Adding a new model or episode
 
